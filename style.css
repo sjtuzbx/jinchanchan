@@ -1,0 +1,83 @@
+body {
+    background-color: #f8f9fa;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.card-header {
+    font-weight: bold;
+    font-size: 1.2rem;
+}
+
+.table th {
+    background-color: #e9ecef;
+    font-weight: 600;
+}
+
+.badge {
+    font-size: 0.9em;
+    padding: 0.5em 0.75em;
+}
+
+.table-hover tbody tr:hover {
+    background-color: rgba(13, 110, 253, 0.05);
+}
+
+.form-check {
+    margin-bottom: 0.5rem;
+}
+
+.btn-lg {
+    padding: 0.5rem 1.5rem;
+    font-size: 1.1rem;
+}
+
+@media (max-width: 768px) {
+    .display-4 {
+        font-size: 2rem;
+    }
+    
+    .card-body .row > div {
+        margin-bottom: 1rem;
+    }
+}
+
+/* 新增回测相关样式 */
+#backtest-results .card {
+    transition: all 0.3s ease;
+}
+
+#backtest-results.highlight {
+    animation: highlight 1.5s ease;
+}
+
+@keyframes highlight {
+    0% { box-shadow: 0 0 0 0 rgba(13, 110, 253, 0.5); }
+    50% { box-shadow: 0 0 0 10px rgba(13, 110, 253, 0); }
+    100% { box-shadow: 0 0 0 20px rgba(13, 110, 253, 0); }
+}
+
+canvas {
+    max-height: 250px;
+}
+
+.table-info th {
+    background-color: #d1ecff;
+}
+
+.form-check-input:checked {
+    background-color: #198754;
+    border-color: #198754;
+}
+
+.benchmark-comparison {
+    background: linear-gradient(to right, #0d6efd, #28a745);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-weight: bold;
+}
+
+@media (max-width: 992px) {
+    #performance-chart, #drawdown-chart {
+        max-height: 200px;
+    }
+}

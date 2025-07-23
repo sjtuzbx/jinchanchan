@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>股票回测系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.0/font/bootstrap-icons.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .card-header {
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
+        
+        .card {
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        
+        .form-label {
+            font-weight: 600;
+            color: #495057;
+        }
+        
+        .btn-lg {
+            padding: 0.75rem 1.5rem;
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+        
+        .chart-container {
+            background-color: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            margin-bottom: 20px;
+        }
+        
+        .metric-card {
+            text-align: center;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+        }
+        
+        .metric-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin: 10px 0;
+        }
+        
+        .metric-label {
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+        
+        .positive {
+            color: #198754;
+        }
+        
+        .negative {
+            color: #dc3545;
+        }
+        
+        .backtest-section {
+            margin-bottom: 30px;
+        }
+        
+        #backtest-results {
+            display: none;
+        }
+        
+        .results-loading {
+            height: 400px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container py-4">
+        <header class="text-center mb-5">
+            <h1 class="display-4 text-primary">股票策略回测系统</h1>
+            <p class="lead text-muted">设置策略参数，系统将为您回测历史表现</p>
+        </header>
+
+        <div class="text-center mb-4">
+            <a href="{{ url_for('index') }}" class="btn btn-success btn-lg">股票筛选</a>
+        </div>
+
+        <!-- 筛选条件和回测参数设置 -->
+        <div class="row backtest-section">
+            <!-- 筛选条件 -->
+            <div class="col-lg-6 mb-4">
+                <div class="card border-primary h-100">
+                    <div class="card-header bg-primary text-white">
+                        <h2 class="card-title"><i class="bi bi-funnel me-2"></i>筛选条件设置</h2>
+                    </div>
+                    <div class="card-body">
+                        <form id="screener-form">
+
+                            
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">排除交易所</label>
+                                <div class="border rounded p-3">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" value="main" name="exclude_exchanges[]" id="exclude-main">
+                                        <label class="form-check-label" for="exclude-main">主板</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" value="kcb" name="exclude_exchanges[]" id="exclude-star">
+                                        <label class="form-check-label" for="exclude-star">科创板</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" value="cyb" name="exclude_exchanges[]" id="exclude-gem">
+                                        <label class="form-check-label" for="exclude-gem">创业板</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" value="bse" name="exclude_exchanges[]" id="exclude-bse">
+                                        <label class="form-check-label" for="exclude-bse">北交所</label>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">筛选条件</label>
+                                <div class="border rounded p-3">
+                                    <div class="form-check mb-3">
+                                        <input class="form-check-input" type="checkbox" value="true" name="exclude_st" id="exclude-st">
+                                        <label class="form-check-label" for="exclude-st">排除ST/*ST股票</label>
+                                    </div>
+                                    <div class="form-check mb-3">
+                                        <input class="form-check-input" type="checkbox" value="true" name="filter_pe_gt_zero" id="filter-pe" checked>
+                                        <label class="form-check-label" for="filter-pe">季度扣非PE > 0 且 扣除商誉市净率 > 0 </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 回测参数设置 -->
+            <div class="col-lg-6 mb-4">
+                <div class="card border-success h-100">
+                    <div class="card-header bg-success text-white">
+                        <h2 class="card-title"><i class="bi bi-gear me-2"></i>回测参数设置</h2>
+                    </div>
+                    <div class="card-body">
+                        <form id="backtest-form">
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label fw-bold">起始日期</label>
+                                    <input type="date" class="form-control" id="start-date" 
+                                           value="{{ start_date |format_date }}" required>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label fw-bold">结束日期</label>
+                                    <input type="date" class="form-control" id="end-date" 
+                                           value="{{ end_date |format_date }}" required>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label fw-bold">持有股票数量</label>
+                                    <input type="number" class="form-control" id="hold-stocks" 
+                                           min="1" max="50" value="10" required>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label fw-bold">调仓周期</label>
+                                    <input type="number" class="form-control" id="rebalance-period" 
+                                           min="1" max="50" value="5" required>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">权重设置</label>
+                                <select class="form-select" id="weight-method">
+                                    <option value="equal">等权重</option>
+                                    <option value="market_cap">按市值加权</option>
+                                    <option value="inverse_pe">按PE倒数加权</option>
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">调仓时点</label>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="rebalance-time" id="open-price" value="open" checked>
+                                    <label class="form-check-label" for="open-price">开盘价</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="rebalance-time" id="close-price" value="close">
+                                    <label class="form-check-label" for="close-price">收盘价</label>
+                                </div>
+                            </div>
+                            
+                            <div class="d-grid mt-4">
+                                <button type="button" class="btn btn-success btn-lg" onclick="runBacktest()">
+                                    <i class="bi bi-graph-up me-2"></i> 开始回测
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 回测结果展示区域 -->
+        <div class="backtest-section" id="backtest-results">
+            <div class="card border-info">
+                <div class="card-header bg-info text-white">
+                    <h2 class="card-title"><i class="bi bi-bar-chart-line me-2"></i>回测结果</h2>
+                </div>
+                <div class="card-body" id="results-content">
+                    <div class="results-loading">
+                        <div class="text-center">
+                            <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status"></div>
+                            <p class="mt-3">请设置参数并点击"开始回测"按钮</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="alert alert-info mt-4">
+            <h5><i class="bi bi-info-circle me-2"></i>回测说明</h5>
+            <p>1. 回测日期范围应在数据可获取的范围内（{{ min_history_date }} 至 {{ today }}）</p>
+            <p>2. 系统模拟交易成本为0.1%（双向），未考虑冲击成本</p>
+            <p>3. 回测结果基于历史数据，不代表未来收益</p>
+        </div>
+        
+        <footer class="mt-4 text-center text-muted">
+            <p>股票回测系统 &copy; 2023</p>
+        </footer>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
+    <script>
+        // 图表实例
+        let performanceChart = null;
+        let drawdownChart = null;
+        let monthlyReturnChart = null;
+        
+        // 获取表单数据并转换为对象（支持多值字段）
+        function getFormDataAsObject(form) {
+            const formData = new FormData(form);
+            const data = {};
+            
+            // 遍历所有表单字段
+            for (const [name, value] of formData.entries()) {
+                // 处理多值字段（如复选框组）
+                console.log(name, value)
+                if (name.endsWith('[]')) {
+                    const baseName = name.slice(0, -2);
+                    
+                    if (!data[baseName]) {
+                        data[baseName] = [];
+                    }
+                    
+                    data[baseName].push(value);
+                } 
+                // 处理单值字段
+                else {
+                    data[name] = value;
+                }
+            }
+            
+            return data;
+        }
+
+
+        // 运行回测函数
+        function runBacktest() {
+            // 获取筛选条件
+            const filterForm = document.getElementById('screener-form');
+            const filterData = getFormDataAsObject(filterForm);
+
+            console.log('filter form is ', filterForm)
+            console.log('filter Form data is ',filterData)
+            // console.log('filter Form data is ', Object.fromEntries(filterFormData))
+            
+            // 获取回测参数
+            const startDate = document.getElementById('start-date').value;
+            const endDate = document.getElementById('end-date').value;
+            const holdStocks = parseInt(document.getElementById('hold-stocks').value);
+            const rebalancePeriod = document.getElementById('rebalance-period').value;
+            const weightMethod = document.getElementById('weight-method').value;
+            const rebalanceTime = document.querySelector('input[name="rebalance-time"]:checked').value;
+            
+            // 显示结果区域
+            const resultsSection = document.getElementById('backtest-results');
+            resultsSection.style.display = 'block';
+            
+            // 显示加载状态
+            const resultsContent = document.getElementById('results-content');
+            resultsContent.innerHTML = `
+                <div class="results-loading">
+                    <div class="text-center">
+                        <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status"></div>
+                        <h4 class="mt-4">正在回测中，请稍候...</h4>
+                        <p class="text-muted">这可能需要一些时间，具体取决于回测周期和股票数量</p>
+                    </div>
+                </div>
+            `;
+            
+            // 销毁旧图表
+            if(performanceChart) {
+                performanceChart.destroy();
+                performanceChart = null;
+            }
+            if(drawdownChart) {
+                drawdownChart.destroy();
+                drawdownChart = null;
+            }
+            if(monthlyReturnChart) {
+                monthlyReturnChart.destroy();
+                monthlyReturnChart = null;
+            }
+            
+            // 发送AJAX请求进行回测
+            fetch('/backtest', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    filter: filterData,
+                    params: {
+                        start_date: startDate,
+                        end_date: endDate,
+                        hold_stocks: holdStocks,
+                        rebalance_period: rebalancePeriod,
+                        weight_method: weightMethod,
+                        rebalance_time: rebalanceTime
+                    }
+                })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('服务器返回错误状态: ' + response.status);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                // 显示回测结果
+                displayBacktestResults(data);
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                resultsContent.innerHTML = `
+                    <div class="alert alert-danger text-center">
+                        <h4><i class="bi bi-exclamation-triangle me-2"></i>回测失败</h4>
+                        <p>${error.message || '请检查参数后重试'}</p>
+                        <p class="small">错误详情: ${error}</p>
+                    </div>
+                `;
+            });
+        }
+        
+        // 显示回测结果
+        function displayBacktestResults(data) {
+            const resultsContent = document.getElementById('results-content');
+            
+            // 格式化数字
+            const formatPercent = value => (value * 100).toFixed(2) + '%';
+            const formatNumber = value => Number(value).toFixed(2);
+            
+            // 生成回测结果HTML
+            resultsContent.innerHTML = `
+                <!-- 关键指标卡片 -->
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="metric-card">
+                            <div class="metric-label">年化收益</div>
+                            <div class="metric-value ${data.annual_return > 0 ? 'positive' : 'negative'}" id="result-annual-return">${formatPercent(data.annual_return)}</div>
+                            <div class="metric-label">策略表现</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="metric-card">
+                            <div class="metric-label">夏普比率</div>
+                            <div class="metric-value" id="result-sharpe-ratio">${formatNumber(data.sharpe_ratio)}</div>
+                            <div class="metric-label">风险调整收益</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="metric-card">
+                            <div class="metric-label">最大回撤</div>
+                            <div class="metric-value negative" id="result-max-drawdown">${formatPercent(data.max_drawdown)}</div>
+                            <div class="metric-label">风险指标</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="metric-card">
+                            <div class="metric-label">超额收益</div>
+                            <div class="metric-value ${data.excess_return > 0 ? 'positive' : 'negative'}" id="result-excess-return">${formatPercent(data.excess_return)}</div>
+                            <div class="metric-label">相对基准</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 图表区域 -->
+                <div class="row">
+                    <div class="col-lg-8">
+                        <div class="chart-container">
+                            <h5 class="mb-3">策略表现对比</h5>
+                            <canvas id="performance-chart" height="300"></canvas>
+                            <div class="mt-2 d-flex justify-content-between">
+                                <span class="text-muted small">基准指数: <span id="result-benchmark">${data.benchmark}</span></span>
+                                <span class="text-muted small">回测周期: <span id="result-backtest-period">${data.start_date} 至 ${data.end_date}</span></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-4">
+                        <div class="chart-container">
+                            <h5 class="mb-3">月度收益分布</h5>
+                            <canvas id="monthly-return-chart" height="300"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <div class="chart-container">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h5>回撤曲线</h5>
+                                <span class="text-muted small" id="result-max-drawdown-period">最大回撤期: ${data.max_drawdown_period}</span>
+                            </div>
+                            <canvas id="drawdown-chart" height="200"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 详细数据表格 -->
+                <div class="mt-4">
+                    <h5 class="mb-3">调仓记录</h5>
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>调仓日期</th>
+                                    <th>持仓数量</th>
+                                    <th>组合市值</th>
+                                    <th>累计收益</th>
+                                    <th>最大回撤</th>
+                                    <th>换手率</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rebalance-details">
+                                ${generateRebalanceTable(data.rebalance_records)}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+            
+            // 渲染图表
+            setTimeout(() => {
+                try {
+                    console.log('chart data is ', data.chart_data)
+                    renderPerformanceChart(data.chart_data);
+                    // renderMonthlyReturnChart(data.monthly_returns);
+                    renderDrawdownChart(data.drawdown_data);
+                } catch (error) {
+                    console.error('图表渲染错误:', error);
+                    resultsContent.innerHTML += `
+                        <div class="alert alert-danger mt-3">
+                            <h5><i class="bi bi-exclamation-triangle me-2"></i>图表渲染失败</h5>
+                            <p>${error.message || '请尝试重新运行回测'}</p>
+                        </div>
+                    `;
+                }
+            }, 100);
+        }
+        
+        // 生成调仓记录表格
+        function generateRebalanceTable(records) {
+            if (!records || records.length === 0) {
+                return `<tr><td colspan="6" class="text-center">暂无调仓记录</td></tr>`;
+            }
+            
+            return records.map(record => `
+                <tr>
+                    <td>${record.date}</td>
+                    <td>${record.holdings}</td>
+                    <td>${record.portfolio_value.toFixed(2)}</td>
+                    <td class="${record.cumulative_return > 0 ? 'text-success' : 'text-danger'}">${(record.cumulative_return * 100).toFixed(2)}%</td>
+                    <td class="text-danger">${(record.drawdown * 100).toFixed(2)}%</td>
+                    <td>${(record.turnover * 100).toFixed(2)}%</td>
+                </tr>
+            `).join('');
+        }
+        
+        // 业绩曲线图渲染
+        function renderPerformanceChart(chartData) {
+            const canvas = document.getElementById('performance-chart');
+            if (!canvas) {
+                console.error('无法找到业绩图表元素');
+                return;
+            }
+            
+            const ctx = canvas.getContext('2d');
+            performanceChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: chartData.labels,
+                    datasets: [
+                        {
+                            label: '策略组合',
+                            data: chartData.strategy,
+                            borderColor: '#0d6efd',
+                            backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            pointRadius: 0
+                        },
+                        {
+                            label: '基准指数',
+                            data: chartData.benchmark,
+                            borderColor: '#fd7e14',
+                            backgroundColor: 'rgba(253, 126, 20, 0.1)',
+                            borderWidth: 2,
+                            borderDash: [5, 5],
+                            fill: false,
+                            pointRadius: 0
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    scales: {
+                        y: {
+                            display: true,
+                            type: 'logarithmic',
+                            title: {
+                                display: true,
+                                text: '净值(对数刻度)'
+                            },
+                            ticks: {
+                                callback: function(value) {
+                                    return value.toFixed(2);
+                                }
+                            }
+                        },
+                        x: {
+                            display: true,
+                            title: {
+                                display: true,
+                                text: '日期'
+                            },
+                            ticks: {
+                                maxRotation: 30,
+                                minRotation: 30
+                            }
+                        }
+                    },
+                    plugins: {
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {
+                                label: function(context) {
+                                    return context.dataset.label + ': ' + context.parsed.y.toFixed(2);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 回撤曲线图渲染
+        function renderDrawdownChart(drawdownData) {
+            const canvas = document.getElementById('drawdown-chart');
+            if (!canvas) {
+                console.error('无法找到回撤图表元素');
+                return;
+            }
+            
+            const ctx = canvas.getContext('2d');
+            drawdownChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: drawdownData.labels,
+                    datasets: [{
+                        label: '回撤幅度',
+                        data: drawdownData.values,
+                        borderColor: '#dc3545',
+                        backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        pointRadius: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            display: true,
+                            beginAtZero: true,
+                            max: 0,
+                            min: Math.min(...drawdownData.values) - 0.05,
+                            ticks: {
+                                callback: function(value) {
+                                    return (value * 100).toFixed(0) + '%';
+                                }
+                            }
+                        },
+                        x: {
+                            display: true,
+                            ticks: {
+                                maxRotation: 30,
+                                minRotation: 30
+                            }
+                        }
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return '回撤: ' + (context.parsed.y * 100).toFixed(2) + '%';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // 月度收益图渲染
+        function renderMonthlyReturnChart(monthlyData) {
+            const canvas = document.getElementById('monthly-return-chart');
+            if (!canvas) {
+                console.error('无法找到月度收益图表元素');
+                return;
+            }
+            
+            const ctx = canvas.getContext('2d');
+            monthlyReturnChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: monthlyData.labels,
+                    datasets: [{
+                        label: '月度收益',
+                        data: monthlyData.values,
+                        backgroundColor: monthlyData.values.map(val => 
+                            val > 0 ? 'rgba(40, 167, 69, 0.7)' : 'rgba(220, 53, 69, 0.7)'
+                        ),
+                        borderColor: monthlyData.values.map(val => 
+                            val > 0 ? 'rgba(40, 167, 69, 1)' : 'rgba(220, 53, 69, 1)'
+                        ),
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            display: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return (value * 100).toFixed(0) + '%';
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return '收益: ' + (context.parsed.y * 100).toFixed(2) + '%';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
