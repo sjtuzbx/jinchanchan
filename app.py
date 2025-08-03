@@ -10,6 +10,8 @@ from data import get_exchange_filter
 from backtest.screener import Screener
 from backtest.backtester import Backtester
 from backtest.data_manager import change_ts
+from logger import Logger
+import traceback
 
 import tushare as ts
 
@@ -41,6 +43,11 @@ def date2int(date_str):
     """将日期字符串转换为整数格式"""
     return int(date_str.replace('-', ''))
 
+@app.errorhandler(Exception)
+def handle_global_exception(e):
+    """记录错误和堆栈"""
+    Logger.error(f"Uncaught exception occurred:{str(e)}")
+    Logger.error("traceback:\n" + traceback.format_exc())
 
 @app.template_filter('format_date')
 def format_date(date_obj, fmt='%Y-%m-%d'):
