@@ -28,6 +28,8 @@ app = Flask(__name__)
 
 # 当前日期作为默认筛选日期
 TODAY = datetime.date.today().isoformat()
+screener = Screener('strategy_config.json.template')
+
 
 def no_cache(view):
     @functools.wraps(view)
@@ -60,7 +62,7 @@ def format_date(date_obj, fmt='%Y-%m-%d'):
     return date_obj.strftime(fmt)
 
 @app.route('/')
-@no_cache
+# @no_cache
 def index():
     # 渲染筛选条件表单页
     return render_template('index.html', 
@@ -70,6 +72,10 @@ def index():
 @app.route('/screener', methods=['POST'])
 def run_screener():
     # 获取用户设置的条件
+    import time
+
+    c1 = time.time()
+    print('c1 = ', c1)
     filter_date = request.form['filter_date']
     exclude_exchanges = request.form.getlist('exclude_exchanges')
     exclude_st = 'exclude_st' in request.form
@@ -77,36 +83,37 @@ def run_screener():
     sort_by = request.form.get('sort_by', 'market_cap_asc')
     print('exclude_exchanges ', exclude_exchanges)
 
-    with open('strategy_config.json', 'w') as fw:
-        with open('strategy_config.json.template', 'r') as fr:
-            data = fr.read()
-            c = json.loads(data)
-            c['STRATEGY']['XSZ_strategy']['trade_strategy']['end_time'] = date2int(TODAY)
-            c['STRATEGY']['XSZ_strategy']['select_strategy']['st_strategy']['exclude'] = exclude_st
-            
-            mapping = {
+    screener.strategy_name_dict['trade_strategy']['end_time'] = date2int(TODAY)
+    screener.strategy_name_dict['select_strategy']['st_strategy']['exclude'] = exclude_st
+
+    mapping = {
                 'main': 'zb_strategy',
                 'kcb': 'kcb_strategy',
                 'cyb': 'cyb_strategy',
                 'bse': 'bse_strategy'
-            }
-            for k in ['main', 'kcb', 'cyb', 'bse']:
-                if k in exclude_exchanges:
-                    c['STRATEGY']['XSZ_strategy']['select_strategy'][mapping[k]]['exclude'] = True
+    }
+    for k in ['main', 'kcb', 'cyb', 'bse']:
+        if k in exclude_exchanges:
+            screener.strategy_name_dict['select_strategy'][mapping[k]]['exclude'] = True
+        else:
+            screener.strategy_name_dict['select_strategy'][mapping[k]]['exclude'] = False
 
-            if not filter_pe_gt_zero:
-                del c['STRATEGY']['XSZ_strategy']['select_strategy']['xsz_strategy']
-            
-            fw.write(json.dumps(c))
+    if not filter_pe_gt_zero:
+        del screener.strategy_name_dict['select_strategy']['xsz_strategy']
+    else:
+        screener.strategy_name_dict['select_strategy']['xsz_strategy'] = {}
+
 
     print(TODAY, 'today ', type(TODAY))
     print(filter_date, type(filter_date))
+    print('strategy_name_dict', screener.strategy_name_dict)
     
     # 应用筛选条件获取股票数据
-    screener = Screener('strategy_config.json')
     stocks = screener.select(date2int(filter_date))
 
     res = []
+    c2 = time.time()
+    print('c2 = ', c2 - c1)
     is_st_dg = screener.dm.is_st(screener.stock_list, date2int(filter_date))
     close_dg = screener.dm.close(screener.stock_list, date2int(filter_date), adj=False)
     total_mv = screener.dm.total_mv(screener.stock_list, date2int(filter_date)) * 1e4
@@ -114,6 +121,10 @@ def run_screener():
     goodwill = np.nan_to_num(screener.dm.goodwill(screener.stock_list, date2int(filter_date)))
     profit_dedtQ = screener.dm.profit_dedtQ(screener.stock_list, date2int(filter_date))
 
+
+
+    c3 = time.time()
+    print('c3 = ', c3 - c2)
     avg_total_mv = []
     index = 1 
     for code, score in stocks[:30]:
@@ -137,6 +148,9 @@ def run_screener():
     exchange_data = get_exchange_filter()
     
     print(res)
+
+    c4 = time.time()
+    print('c4 = ', c4 - c3)
     # 渲染结果页面
     return render_template('result.html', 
                            stocks=res,
@@ -149,7 +163,7 @@ def run_screener():
 
 
 @app.route('/backtest')
-@no_cache
+# @no_cache
 def backtest_page():
     # 历史数据的最早日期 (假设有2年历史数据)
     min_history_date = (datetime.date.today() - timedelta(days=365)).isoformat()
@@ -161,7 +175,7 @@ def backtest_page():
                            min_history_date=min_history_date[:10])
 
 @app.route('/backtest', methods=['POST'])
-@no_cache
+# @no_cache
 def run_backtest():
     # 获取筛选条件和回测参数
     # try:
