@@ -1,7 +1,7 @@
 {
     "UNIVERSE": {
-        "path": "/home/zbx/code/backtest/backtest/xsz_universe.csv",
-        "eqcache_path": "/home/zbx/market_data/"
+        "path": "../backtest/backtest/xsz_universe.csv",
+        "eqcache_path": "../data_factory/"
     },
     "STRATEGY": {
         "STRATEGY_NAME": "XSZ_strategy",
