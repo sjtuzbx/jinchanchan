@@ -31,6 +31,7 @@ FEAR_GREED_HEADERS = {
     "Accept": "application/json, text/plain, */*",
     "Referer": "https://www.cnn.com/markets/fear-and-greed"
 }
+BEIJING_TZ = datetime.timezone(datetime.timedelta(hours=8), name="CST")
 
 app = Flask(__name__)
 
@@ -59,6 +60,25 @@ def handle_global_exception(e):
     Logger.error(f"Uncaught exception occurred:{str(e)}")
     Logger.error("traceback:\n" + traceback.format_exc())
 
+def format_beijing_timestamp(ts):
+    """将时间戳/ISO字符串转为北京时间字符串"""
+    if not ts:
+        return None
+    try:
+        if isinstance(ts, (int, float)):
+            # CNN部分字段是毫秒时间戳
+            if ts > 1e12:
+                ts = ts / 1000.0
+            dt_obj = datetime.datetime.fromtimestamp(ts, tz=datetime.timezone.utc)
+        elif isinstance(ts, str):
+            dt_obj = datetime.datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        else:
+            return None
+        return dt_obj.astimezone(BEIJING_TZ).strftime("%Y-%m-%d %H:%M:%S CST")
+    except Exception as ex:
+        Logger.error(f"timestamp format failed: {ex}")
+        return None
+
 def fetch_fear_greed():
     """拉取CNN恐惧与贪婪指数数据"""
     resp = requests.get(FEAR_GREED_URL, headers=FEAR_GREED_HEADERS, timeout=10)
@@ -68,6 +88,7 @@ def fetch_fear_greed():
 def parse_fear_greed_payload(payload):
     """整理主指标和子指标数据，便于模板展示"""
     main = payload.get('fear_and_greed', {})
+    main['timestamp_cn'] = format_beijing_timestamp(main.get('timestamp'))
     history_points = payload.get('fear_and_greed_historical', {}).get('data', [])
 
     indicator_name_map = {
@@ -93,6 +114,7 @@ def parse_fear_greed_payload(payload):
             'score': item.get('score'),
             'rating': item.get('rating'),
             'timestamp': item.get('timestamp'),
+            'timestamp_cn': format_beijing_timestamp(item.get('timestamp')),
             'chart': item.get('data', [])[:60],  # 近期数据，防止过长
         })
 
