@@ -278,6 +278,7 @@ def persist_cn_sentiment(trade_date, main, subs):
             "价格强度(涨停-跌停占比)": "strength",
             "波动率(反向)": "volatility",
             "平均涨跌幅": "avgret",
+            "沪深300期权PCR(IO)": "pcr",
         }.get(key, key)
         row[f"{col}_val"] = item.get("value")
         row[f"{col}_score"] = item.get("score")
@@ -316,6 +317,15 @@ def build_subs_from_record(rec):
             "score": score_val,
             "rating": score_rating(score_val) if score_val is not None else None
         })
+    # 若缺失PCR字段，从记录中追加
+    if not any(s["label"].startswith("沪深300期权PCR") for s in subs):
+        if "pcr_val" in rec or "pcr_score" in rec:
+            subs.append({
+                "label": "沪深300期权PCR(IO)",
+                "value": rec.get("pcr_val"),
+                "score": rec.get("pcr_score"),
+                "rating": score_rating(rec.get("pcr_score")) if rec.get("pcr_score") is not None else None
+            })
     return subs
 @app.template_filter('format_date')
 def format_date(date_obj, fmt='%Y-%m-%d'):

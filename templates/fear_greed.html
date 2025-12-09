@@ -132,15 +132,6 @@
                     </div>
                 </div>
             </div>
-
-            <div class="card mt-3">
-                <div class="card-header">
-                    <h5 class="mb-0">细分指标时间轴</h5>
-                </div>
-                <div class="card-body">
-                    <canvas id="sub-timeline" height="220"></canvas>
-                </div>
-            </div>
         </div>
     </div>
 
@@ -248,41 +239,8 @@
             });
         }
 
-        function renderTimeline() {
-            const filtered = subIndicators.filter(s => s.chart && s.chart.length && !['market_momentum_sp125','market_volatility_vix_50'].includes(s.key));
-            if (!filtered.length) return;
-            const ctx = document.getElementById('sub-timeline')?.getContext('2d');
-            if (!ctx) return;
-            // 使用第一个指标的时间轴
-            const labels = filtered[0].chart.map(p => new Date(p.x).toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai' }));
-            const datasets = filtered.map((ind, i) => ({
-                label: ind.label,
-                data: ind.chart.map(p => Number(p.y)),
-                borderColor: ratingColor(ind.rating) || ['#0f9cf5','#f25555','#28a745','#ff9f43','#6c757d'][i % 5],
-                backgroundColor: 'rgba(0,0,0,0)',
-                borderWidth: 2,
-                tension: 0.35,
-                pointRadius: 0
-            }));
-            new Chart(ctx, {
-                type: 'line',
-                data: { labels, datasets },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: { mode: 'index', intersect: false },
-                    plugins: { legend: { display: true } },
-                    scales: {
-                        y: { ticks: { callback: v => Number(v).toFixed(0) } },
-                        x: { ticks: { maxTicksLimit: 6 } }
-                    }
-                }
-            });
-        }
-
         renderHistory();
         renderSubCharts();
-        renderTimeline();
     </script>
 </body>
 </html>
