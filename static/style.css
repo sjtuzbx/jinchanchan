@@ -1,167 +1,190 @@
+:root {
+    --bg: #f5f7fa;
+    --panel: #ffffff;
+    --border: #e5e7eb;
+    --text: #1f2d3d;
+    --muted: #697386;
+    --primary: #0064c8;
+    --primary-2: #0a84ff;
+    --success: #00a870;
+    --danger: #f25555;
+    --shadow: 0 10px 30px rgba(0,0,0,0.06);
+}
+
 body {
-    background-color: #f8f9fa;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: var(--bg);
+    font-family: "Alibaba PuHuiTi", "Helvetica Neue", Arial, sans-serif;
+    color: var(--text);
+}
+
+.console-shell {
+    min-height: 100vh;
+}
+
+.console-header {
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.05);
+}
+
+.console-brand {
+    font-weight: 700;
+    color: var(--primary);
+}
+
+.console-nav a {
+    color: var(--muted);
+    margin-right: 16px;
+    text-decoration: none;
+    padding: 8px 10px;
+    border-radius: 8px;
+}
+
+.console-nav a.active, .console-nav a:hover {
+    color: var(--primary);
+    background: rgba(0,100,200,0.08);
+}
+
+.console-breadcrumb {
+    color: var(--muted);
+}
+
+.card {
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
 }
 
 .card-header {
-    font-weight: bold;
-    font-size: 1.2rem;
-}
-
-.table th {
-    background-color: #e9ecef;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
     font-weight: 600;
 }
 
-.badge {
-    font-size: 0.9em;
-    padding: 0.5em 0.75em;
-}
-
-.table-hover tbody tr:hover {
-    background-color: rgba(13, 110, 253, 0.05);
-}
-
-.form-check {
-    margin-bottom: 0.5rem;
-}
-
-.btn-lg {
-    padding: 0.5rem 1.5rem;
+.card-title {
+    margin: 0;
     font-size: 1.1rem;
 }
 
-@media (max-width: 768px) {
+.table th {
+    background-color: #f3f5f8;
+    font-weight: 600;
+    color: var(--muted);
+    border-top: none;
+}
+
+.table-hover tbody tr:hover {
+    background-color: #f7f9fc;
+}
+
+.badge {
+    font-size: 0.85em;
+    padding: 0.45em 0.75em;
+    border-radius: 999px;
+}
+
+.btn-primary {
+    background: var(--primary);
+    border-color: var(--primary);
+}
+.btn-primary:hover {
+    background: var(--primary-2);
+    border-color: var(--primary-2);
+}
+
+.btn-outline-primary {
+    color: var(--primary);
+    border-color: var(--primary);
+}
+.btn-outline-primary:hover {
+    background: var(--primary);
+    color: #fff;
+}
+
+.btn-success {
+    background: var(--success);
+    border-color: var(--success);
+}
+
+.form-check-input:checked {
+    background-color: var(--primary);
+    border-color: var(--primary);
+}
+
+.muted {
+    color: var(--muted);
+}
+
+/* 图表尺寸 */
+canvas {
+    max-height: 260px;
+}
+
+/* 情绪页 */
+.fg-hero-section {
+    background: linear-gradient(135deg, #0f59c9 0%, #0c2f62 100%);
+    color: #fff;
+}
+.fg-card {
+    color: var(--text);
+}
+.fg-score-value {
+    font-size: 3rem;
+    font-weight: 800;
+    line-height: 1;
+    color: var(--primary);
+}
+.fg-score-label {
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-size: 0.9rem;
+    color: var(--muted);
+}
+.fg-metrics {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.35rem 0.9rem;
+    margin-top: 0.2rem;
+}
+.indicator-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    padding: 14px;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.indicator-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 30px rgba(0,0,0,0.08);
+}
+.sub-chart {
+    width: 100%;
+}
+.extreme-fear-pill { background: #f25555; color: #fff; }
+.fear-pill { background: #ff9f43; color: #fff; }
+.neutral-pill { background: #c5c9d2; color: #28313c; }
+.greed-pill { background: #28a745; color: #fff; }
+.extreme-greed-pill { background: #0a8c4c; color: #fff; }
+
+/* 回测区域特效 */
+#backtest-results .card {
+    transition: all 0.3s ease;
+}
+#backtest-results.highlight {
+    animation: highlight 1.5s ease;
+}
+@keyframes highlight {
+    0% { box-shadow: 0 0 0 0 rgba(0, 100, 200, 0.35); }
+    50% { box-shadow: 0 0 0 10px rgba(0, 100, 200, 0); }
+    100% { box-shadow: 0 0 0 20px rgba(0, 100, 200, 0); }
+}
+
+@media (max-width: 992px) {
     .display-4 {
         font-size: 2rem;
     }
-    
     .card-body .row > div {
         margin-bottom: 1rem;
     }
 }
-
-/* 新增回测相关样式 */
-#backtest-results .card {
-    transition: all 0.3s ease;
-}
-
-#backtest-results.highlight {
-    animation: highlight 1.5s ease;
-}
-
-@keyframes highlight {
-    0% { box-shadow: 0 0 0 0 rgba(13, 110, 253, 0.5); }
-    50% { box-shadow: 0 0 0 10px rgba(13, 110, 253, 0); }
-    100% { box-shadow: 0 0 0 20px rgba(13, 110, 253, 0); }
-}
-
-canvas {
-    max-height: 250px;
-}
-
-.table-info th {
-    background-color: #d1ecff;
-}
-
-.form-check-input:checked {
-    background-color: #198754;
-    border-color: #198754;
-}
-
-.benchmark-comparison {
-    background: linear-gradient(to right, #0d6efd, #28a745);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    font-weight: bold;
-}
-
-@media (max-width: 992px) {
-    #performance-chart, #drawdown-chart {
-        max-height: 200px;
-    }
-}
-
-/* 恐惧与贪婪监控页 2.0 */
-.fg-body {
-    background: #0b1021;
-}
-
-.fg-hero-section {
-    background: radial-gradient(80% 80% at 20% 20%, rgba(13, 110, 253, 0.35), rgba(13, 110, 253, 0) 60%), linear-gradient(135deg, #0d6efd 0%, #0b61d6 50%, #0c1e51 100%);
-}
-
-.fg-card {
-    background: #0f1428;
-    color: #e6e8f0;
-    border: 1px solid rgba(255, 255, 255, 0.04);
-    border-radius: 16px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-}
-
-.fg-card .card-header {
-    background: transparent;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.fg-card-dark {
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.02) 100%);
-}
-
-.fg-score-value {
-    font-size: 3.2rem;
-    font-weight: 800;
-    line-height: 1;
-    color: #fff;
-}
-
-.fg-score-label {
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    font-size: 0.9rem;
-}
-
-.fg-metrics {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.45rem 1rem;
-    margin-top: 0.35rem;
-}
-
-.fg-metrics-light strong {
-    color: #fff;
-}
-
-.fg-metric span {
-    font-size: 0.85rem;
-}
-
-.indicator-card {
-    background: #0f1428;
-    padding: 16px;
-    border-radius: 14px;
-    color: #e6e8f0;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
-}
-
-.indicator-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.32);
-    border-color: rgba(13, 110, 253, 0.25);
-}
-
-.indicator-card .display-6 {
-    color: #e6e8f0;
-}
-
-.sub-chart {
-    width: 100%;
-}
-
-.extreme-fear-pill { background: #dc3545; }
-.fear-pill { background: #fd7e14; }
-.neutral-pill { background: #6c757d; }
-.greed-pill { background: #28a745; }
-.extreme-greed-pill { background: #198754; }

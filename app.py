@@ -87,9 +87,17 @@ def fetch_fear_greed():
 
 def parse_fear_greed_payload(payload):
     """整理主指标和子指标数据，便于模板展示"""
-    main = payload.get('fear_and_greed', {})
+    main = payload.get('fear_and_greed', {}) or {}
+    history_points = payload.get('fear_and_greed_historical', {}).get('data', []) or []
+
+    # 若实时主指标缺失，尝试用历史最后一个点兜底
+    if not main.get('score') and history_points:
+        last_point = history_points[-1]
+        main['score'] = last_point.get('y')
+        main['rating'] = last_point.get('rating', main.get('rating'))
+        main['timestamp'] = last_point.get('x')
+
     main['timestamp_cn'] = format_beijing_timestamp(main.get('timestamp'))
-    history_points = payload.get('fear_and_greed_historical', {}).get('data', [])
 
     indicator_name_map = {
         'market_momentum_sp500': '市场动量(S&P 500)',
