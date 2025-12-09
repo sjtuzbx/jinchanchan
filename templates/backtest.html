@@ -16,7 +16,8 @@
                 <nav class="console-nav">
                     <a href="{{ url_for('index') }}">筛选</a>
                     <a href="{{ url_for('backtest_page') }}" class="active">回测</a>
-                    <a href="{{ url_for('fear_greed') }}">市场情绪</a>
+                    <a href="{{ url_for('fear_greed') }}">美股情绪</a>
+                    <a href="{{ url_for('cn_fear') }}">A股情绪</a>
                 </nav>
             </div>
         </div>
@@ -28,7 +29,10 @@
                     <h2 class="fw-bold mb-0">回测设置与结果</h2>
                     <div class="muted">配置选股规则与回测参数，生成指标与图表</div>
                 </div>
-                <a href="{{ url_for('fear_greed') }}" class="btn btn-outline-primary">查看市场情绪</a>
+                <div class="d-flex gap-2">
+                    <a href="{{ url_for('fear_greed') }}" class="btn btn-outline-primary">美股情绪</a>
+                    <a href="{{ url_for('cn_fear') }}" class="btn btn-outline-primary">A股情绪</a>
+                </div>
             </div>
 
             <div class="row g-3">

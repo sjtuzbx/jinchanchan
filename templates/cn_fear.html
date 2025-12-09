@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>市场情绪监控 - 量化控制台</title>
+    <title>A股情绪指数 - 量化控制台</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.0/font/bootstrap-icons.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
@@ -16,8 +16,8 @@
                 <nav class="console-nav">
                     <a href="{{ url_for('index') }}">筛选</a>
                     <a href="{{ url_for('backtest_page') }}">回测</a>
-                    <a href="{{ url_for('fear_greed') }}" class="active">美股情绪</a>
-                    <a href="{{ url_for('cn_fear') }}">A股情绪</a>
+                    <a href="{{ url_for('fear_greed') }}">美股情绪</a>
+                    <a href="{{ url_for('cn_fear') }}" class="active">A股情绪</a>
                 </nav>
             </div>
         </div>
@@ -26,9 +26,9 @@
             <div class="container">
                 <div class="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center gap-3">
                     <div>
-                        <div class="text-white-50 small">CNN Markets · Fear & Greed</div>
-                        <h2 class="fw-bold text-white mb-1">市场情绪监控</h2>
-                        <div class="text-white-50">主指标 + 历史走势，洞察市场温度</div>
+                        <div class="text-white-50 small">A股全市场 · 恐慌/贪婪指数</div>
+                        <h2 class="fw-bold text-white mb-1">A股市场情绪</h2>
+                        <div class="text-white-50">基于当日全市场行情计算的情绪温度</div>
                     </div>
                     <div class="d-flex gap-2">
                         <a href="{{ url_for('index') }}" class="btn btn-light">股票筛选</a>
@@ -46,35 +46,17 @@
                             <div class="card-body">
                                 <div class="d-flex justify-content-between align-items-center mb-2">
                                     <span class="badge bg-light text-dark">主指标</span>
-                                    <span class="muted small">最近更新时间(北京): {{ main.timestamp_cn or '—' }}</span>
+                                    <span class="muted small">交易日: {{ trade_date or '今日' }}</span>
                                 </div>
                                 <div class="d-flex align-items-center gap-3">
                                     <div class="fg-score text-center">
                                         <div class="fg-score-value">{{ (main.score or 0) | round(2) }}</div>
-                                        <div class="fg-score-label">Fear & Greed</div>
+                                        <div class="fg-score-label">A股情绪</div>
                                     </div>
                                     <div class="flex-grow-1">
                                         <div class="d-flex align-items-center gap-2 mb-2">
                                             <span class="badge {{ main.rating|default('neutral') | replace(' ', '-') }}-pill text-uppercase">{{ main.rating or 'n/a' }}</span>
                                             <span class="muted small">0 (极度恐惧) - 100 (极度贪婪)</span>
-                                        </div>
-                                        <div class="fg-metrics">
-                                            <div class="fg-metric">
-                                                <span class="muted">前收:</span>
-                                                <strong>{{ main.previous_close|default('—') | round(2) if main.previous_close is not none else '—' }}</strong>
-                                            </div>
-                                            <div class="fg-metric">
-                                                <span class="muted">1周前:</span>
-                                                <strong>{{ main.previous_1_week|default('—') | round(2) if main.previous_1_week is not none else '—' }}</strong>
-                                            </div>
-                                            <div class="fg-metric">
-                                                <span class="muted">1月前:</span>
-                                                <strong>{{ main.previous_1_month|default('—') | round(2) if main.previous_1_month is not none else '—' }}</strong>
-                                            </div>
-                                            <div class="fg-metric">
-                                                <span class="muted">1年前:</span>
-                                                <strong>{{ main.previous_1_year|default('—') | round(2) if main.previous_1_year is not none else '—' }}</strong>
-                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -86,9 +68,9 @@
                             <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-center">
                                 <div>
                                     <div class="small text-uppercase text-muted fw-semibold">历史走势</div>
-                                    <h5 class="mb-0">近况</h5>
+                                    <h5 class="mb-0">当日取值</h5>
                                 </div>
-                                <span class="badge bg-light text-dark">最近 {{ history|length }} 个点</span>
+                                <span class="badge bg-light text-dark">最新</span>
                             </div>
                             <div class="card-body">
                                 <canvas id="history-chart" height="110"></canvas>
@@ -100,36 +82,74 @@
         </div>
 
         <div class="container py-4">
-            <div class="card">
-                <div class="card-header d-flex flex-column flex-lg-row align-items-lg-center justify-content-between">
-                    <div>
-                        <div class="small text-uppercase text-muted fw-semibold">细分指标</div>
-                        <h5 class="mb-0">CNN 七大维度</h5>
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">细分指标</h5>
+                        <button class="btn btn-outline-primary btn-sm" id="toggle-sub">展开/收起</button>
                     </div>
-                    <span class="muted small">市场动量、价格强度、期权、波动率、信用债与避险需求</span>
-                </div>
-                <div class="card-body">
+                <div class="card-body" id="sub-container" style="display:none;">
                     <div class="row g-3">
                         {% for item in sub_indicators %}
                         <div class="col-12 col-md-6 col-lg-4">
                             <div class="indicator-card h-100">
                                 <div class="d-flex justify-content-between align-items-start mb-2">
                                     <div class="fw-bold">{{ item.label }}</div>
-                                    <span class="badge {{ item.rating|default('neutral') | replace(' ', '-') }}-pill text-uppercase">{{ item.rating or 'n/a' }}</span>
+                                    <span class="badge {{ item.rating|default('neutral') | replace(' ', '-') }}-pill text-uppercase">{{ item.rating or '' }}</span>
                                 </div>
                                 <div class="d-flex align-items-end gap-2">
                                     <div class="display-6 fw-bold mb-0">{{ item.score is not none and (item.score | round(2)) or '—' }}</div>
                                     <span class="muted small">评分</span>
                                 </div>
-                                <div class="muted small mt-1">最近更新时间(北京): {{ item.timestamp_cn or '—' }}</div>
-                                {% if item.chart %}
-                                <div class="small muted mt-2">近期走势 (近 {{ item.chart|length }} 期)</div>
-                                <canvas class="sub-chart mt-2" data-points='{{ item.chart|tojson }}' height="70"></canvas>
-                                {% endif %}
+                                <div class="muted small mt-1">指标值: {{ item.value is not none and (item.value | round(4)) or '—' }}</div>
                             </div>
                         </div>
                         {% endfor %}
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="container pb-5">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">历史记录 (CSV)</h5>
+                    <span class="muted small">文件: data/cn_sentiment_history.csv</span>
+                </div>
+                <div class="card-body">
+                    {% if history_table %}
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th>日期</th>
+                                    <th>得分</th>
+                                    <th>评级</th>
+                                    <th>市场动量</th>
+                                    <th>价格广度</th>
+                                    <th>价格强度</th>
+                                    <th>波动率(反向)</th>
+                                    <th>平均涨跌</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in history_table %}
+                                <tr>
+                                    <td>{{ row.trade_date }}</td>
+                                    <td>{{ row.score|round(2) if row.score is not none else '—' }}</td>
+                                    <td>{{ row.rating or '—' }}</td>
+                                    <td>{{ row.momentum_val|round(4) if row.momentum_val is not none else '—' }} / {{ row.momentum_score|round(2) if row.momentum_score is not none else '—' }}</td>
+                                    <td>{{ row.breadth_val|round(4) if row.breadth_val is not none else '—' }} / {{ row.breadth_score|round(2) if row.breadth_score is not none else '—' }}</td>
+                                    <td>{{ row.strength_val|round(4) if row.strength_val is not none else '—' }} / {{ row.strength_score|round(2) if row.strength_score is not none else '—' }}</td>
+                                    <td>{{ row.volatility_val|round(4) if row.volatility_val is not none else '—' }} / {{ row.volatility_score|round(2) if row.volatility_score is not none else '—' }}</td>
+                                    <td>{{ row.avgret_val|round(4) if row.avgret_val is not none else '—' }} / {{ row.avgret_score|round(2) if row.avgret_score is not none else '—' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="muted text-center">暂无历史记录</div>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -139,7 +159,6 @@
     <script>
         const historyData = {{ history | tojson }};
         const subIndicators = {{ sub_indicators | tojson }};
-        const extras = {{ extras | tojson }};
 
         function ratingColor(rating) {
             if (!rating) return '#6c757d';
@@ -161,7 +180,7 @@
                 data: {
                     labels,
                     datasets: [{
-                        label: 'Fear & Greed',
+                        label: 'A股情绪',
                         data: values,
                         borderColor: '#0f9cf5',
                         backgroundColor: 'rgba(15, 156, 245, 0.12)',
@@ -176,7 +195,7 @@
                     interaction: { mode: 'index', intersect: false },
                     scales: {
                         y: { beginAtZero: true, max: 100, ticks: { stepSize: 20 } },
-                        x: { ticks: { maxTicksLimit: 6 } }
+                        x: { ticks: { maxTicksLimit: 4 } }
                     },
                     plugins: {
                         legend: { display: false },
@@ -188,51 +207,27 @@
 
         function renderSubCharts() {
             document.querySelectorAll('.sub-chart').forEach((canvas, idx) => {
-                const indicator = subIndicators[idx];
-                const key = indicator.key;
-                let datasets = [];
-                let labels = [];
-                if (key === 'market_momentum_sp500') {
-                    const series = extras.momentum_series || [];
-                    const ma = extras.momentum_ma || [];
-                    if (!series.length && !ma.length) return;
-                    labels = series.map(p => new Date(p.x).toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai' }));
-                    datasets = [
-                        { label: 'S&P 500', data: series.map(p => Number(p.y)), borderColor: '#0f9cf5', backgroundColor: 'rgba(15,156,245,0.08)', borderWidth: 2, fill: false, pointRadius: 0 },
-                        { label: '125日均线', data: ma.map(p => Number(p.y)), borderColor: '#6c757d', backgroundColor: 'rgba(108,117,125,0.08)', borderWidth: 2, borderDash: [6,4], fill: false, pointRadius: 0 },
-                    ];
-                } else if (key === 'market_volatility_vix') {
-                    const vix = extras.vix_series || [];
-                    const vixMa = extras.vix_ma || [];
-                    if (!vix.length && !vixMa.length) return;
-                    labels = vix.map(p => new Date(p.x).toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai' }));
-                    datasets = [
-                        { label: 'VIX', data: vix.map(p => Number(p.y)), borderColor: '#f25555', backgroundColor: 'rgba(242,85,85,0.1)', borderWidth: 2, fill: false, pointRadius: 0 },
-                        { label: 'VIX 50日均', data: vixMa.map(p => Number(p.y)), borderColor: '#6c757d', backgroundColor: 'rgba(108,117,125,0.08)', borderWidth: 2, borderDash: [6,4], fill: false, pointRadius: 0 },
-                    ];
-                } else {
-                    const points = JSON.parse(canvas.dataset.points || '[]');
-                    if (!points.length) return;
-                    labels = points.map(() => '');
-                    datasets = [{
-                        label: indicator.label,
-                        data: points.map(p => Number(p.y)),
-                        borderColor: ratingColor(indicator.rating),
-                        backgroundColor: 'rgba(0,0,0,0)',
-                        borderWidth: 2,
-                        tension: 0.35,
-                        pointRadius: 0
-                    }];
-                }
-
+                const points = JSON.parse(canvas.dataset.points || '[]');
+                if (!points.length) return;
+                const dataY = points.map(p => Number(p.y));
                 new Chart(canvas.getContext('2d'), {
                     type: 'line',
-                    data: { labels, datasets },
+                    data: {
+                        labels: points.map(() => ''),
+                        datasets: [{
+                            data: dataY,
+                            borderColor: ratingColor(subIndicators[idx].rating),
+                            backgroundColor: 'rgba(0,0,0,0)',
+                            borderWidth: 2,
+                            tension: 0.35,
+                            pointRadius: 0
+                        }]
+                    },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
                         scales: { y: { display: false }, x: { display: false } },
-                        plugins: { legend: { display: datasets.length > 1 }, tooltip: { enabled: false } }
+                        plugins: { legend: { display: false }, tooltip: { enabled: false } }
                     }
                 });
             });
@@ -241,10 +236,10 @@
         renderHistory();
         renderSubCharts();
 
-        renderHistory();
-        renderSubCharts();
-        renderMomentumChart();
-        renderVixChart();
+        document.getElementById('toggle-sub').addEventListener('click', () => {
+            const box = document.getElementById('sub-container');
+            box.style.display = box.style.display === 'none' ? 'block' : 'none';
+        });
     </script>
 </body>
 </html>

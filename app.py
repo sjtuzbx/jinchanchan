@@ -1,6 +1,8 @@
 from flask import Flask, render_template, request, redirect, url_for
 import json
 import numpy as np
+import pandas as pd
+from pathlib import Path
 import datetime
 from datetime import timedelta
 import random
@@ -15,6 +17,10 @@ import traceback
 import requests
 
 import tushare as ts
+try:
+    from data_factory.setting import token as TS_TOKEN
+except Exception:
+    TS_TOKEN = None
 
 exchange_name_dict = {
     "BSE": "北交所",
@@ -22,7 +28,7 @@ exchange_name_dict = {
     "SSE": "上交所"
 }
 
-token = "1e266a5110f1d8fd926d3af0d034458b9d5c904636c72c723ab9fa38"
+token = TS_TOKEN or "1e266a5110f1d8fd926d3af0d034458b9d5c904636c72c723ab9fa38"
 pro = ts.pro_api(token)
 
 FEAR_GREED_URL = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
@@ -32,6 +38,7 @@ FEAR_GREED_HEADERS = {
     "Referer": "https://www.cnn.com/markets/fear-and-greed"
 }
 BEIJING_TZ = datetime.timezone(datetime.timedelta(hours=8), name="CST")
+CN_HISTORY_CSV = Path(__file__).resolve().parent / "data" / "cn_sentiment_history.csv"
 
 app = Flask(__name__)
 
@@ -71,13 +78,19 @@ def format_beijing_timestamp(ts):
                 ts = ts / 1000.0
             dt_obj = datetime.datetime.fromtimestamp(ts, tz=datetime.timezone.utc)
         elif isinstance(ts, str):
-            dt_obj = datetime.datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            if ts.isdigit() and len(ts) == 8:
+                dt_obj = datetime.datetime.strptime(ts, "%Y%m%d").replace(tzinfo=datetime.timezone.utc)
+            else:
+                dt_obj = datetime.datetime.fromisoformat(ts.replace("Z", "+00:00"))
         else:
             return None
         return dt_obj.astimezone(BEIJING_TZ).strftime("%Y-%m-%d %H:%M:%S CST")
     except Exception as ex:
         Logger.error(f"timestamp format failed: {ex}")
         return None
+
+def beijing_now():
+    return datetime.datetime.now(datetime.timezone.utc).astimezone(BEIJING_TZ)
 
 def fetch_fear_greed():
     """拉取CNN恐惧与贪婪指数数据"""
@@ -126,7 +139,184 @@ def parse_fear_greed_payload(payload):
             'chart': item.get('data', [])[:60],  # 近期数据，防止过长
         })
 
-    return main, history_points, sub_list
+    extras = {
+        "momentum_series": payload.get("market_momentum_sp500", {}).get("data", []),
+        "momentum_ma": payload.get("market_momentum_sp125", {}).get("data", []),
+        "vix_series": payload.get("market_volatility_vix", {}).get("data", []),
+        "vix_ma": payload.get("market_volatility_vix_50", {}).get("data", []),
+    }
+
+    return main, history_points, sub_list, extras
+
+def score_rating(score):
+    if score is None:
+        return "n/a"
+    if score < 25:
+        return "extreme fear"
+    if score < 45:
+        return "fear"
+    if score < 55:
+        return "neutral"
+    if score < 75:
+        return "greed"
+    return "extreme greed"
+
+def scale_0_100(value, low, high):
+    if value is None:
+        return 50
+    if high == low:
+        return 50
+    clipped = max(min(value, high), low)
+    return (clipped - low) / (high - low) * 100
+
+def compute_cn_sentiment(trade_date=None):
+    """基于A股行情，按CNN Fear & Greed思路的简化版：
+    - 市场动量：沪深300收盘/125日均线
+    - 价格广度：上涨家数占比
+    - 价格强度：涨停-跌停占比差
+    - 波动率：沪深300近20日年化波动（反向处理）
+    - 平均涨跌：全市场日均涨跌幅
+    默认：17:00前使用前一交易日，17:00后使用当日。
+    """
+    if trade_date is None:
+        now_bj = beijing_now()
+        target_date = now_bj.date() if now_bj.hour >= 17 else now_bj.date() - datetime.timedelta(days=1)
+        trade_date = target_date.strftime("%Y%m%d")
+    elif "-" in str(trade_date):
+        trade_date = trade_date.replace("-", "")
+
+    df = pro.daily(trade_date=trade_date)
+    if df is None or df.empty:
+        return None
+
+    total = len(df)
+    if total == 0:
+        return None
+
+    pct = df['pct_chg']
+    adv_ratio = (pct > 0).sum() / total
+    limit_up = (pct >= 9.5).sum() / total
+    limit_down = (pct <= -9.5).sum() / total
+    avg_pct = float(pct.mean())
+
+    # 指数动量 & 波动率（沪深300）
+    start_hist = (datetime.datetime.strptime(trade_date, "%Y%m%d") - datetime.timedelta(days=220)).strftime("%Y%m%d")
+    idx_df = pro.index_daily(ts_code="000300.SH", start_date=start_hist, end_date=trade_date)
+    idx_df = idx_df.sort_values("trade_date")
+    if idx_df.empty:
+        return None
+    idx_df["ret"] = idx_df["close"].pct_change()
+    idx_df["ma125"] = idx_df["close"].rolling(125, min_periods=20).mean()
+    last_idx = idx_df.iloc[-1]
+    momentum_val = (last_idx["close"] / last_idx["ma125"] - 1) if last_idx["ma125"] else 0
+    vol20 = idx_df["ret"].tail(20).std() * np.sqrt(252)
+
+    # 看涨看跌比（沪深300期权 IO，按成交量）
+    pcr_val = None
+    try:
+        opt_df = pro.opt_daily(trade_date=trade_date, fields="ts_code,trade_date,call_put,vol")
+        if opt_df is not None and not opt_df.empty:
+            io_df = opt_df[opt_df["ts_code"].str.startswith("IO")]
+            if not io_df.empty:
+                call_vol = io_df[io_df["call_put"] == "C"]["vol"].sum()
+                put_vol = io_df[io_df["call_put"] == "P"]["vol"].sum()
+                if call_vol and put_vol:
+                    pcr_val = put_vol / call_vol
+    except Exception as e:
+        Logger.error(f"compute pcr failed: {e}")
+
+    sub_indicators = [
+        {"label": "市场动量(沪深300/125日均)", "value": momentum_val, "score": scale_0_100(momentum_val, -0.05, 0.05)},
+        {"label": "价格广度(上涨家数占比)", "value": adv_ratio, "score": scale_0_100(adv_ratio, 0.2, 0.8)},
+        {"label": "价格强度(涨停-跌停占比)", "value": limit_up - limit_down, "score": scale_0_100(limit_up - limit_down, -0.05, 0.05)},
+        {"label": "波动率(反向)", "value": vol20, "score": 100 - scale_0_100(vol20, 0.08, 0.35)},
+        {"label": "平均涨跌幅", "value": avg_pct, "score": scale_0_100(avg_pct, -2.0, 2.0)},
+    ]
+    if pcr_val is not None:
+        sub_indicators.append({
+            "label": "沪深300期权PCR(IO)",
+            "value": pcr_val,
+            "score": 100 - scale_0_100(pcr_val, 0.7, 1.3)
+        })
+    for item in sub_indicators:
+        item["rating"] = score_rating(item["score"])
+
+    main_score = float(np.mean([s["score"] for s in sub_indicators]))
+    rating = score_rating(main_score)
+    history_points = [{"x": int(datetime.datetime.strptime(trade_date, "%Y%m%d").timestamp() * 1000), "y": main_score, "rating": rating}]
+
+    return {
+        "trade_date": trade_date,
+        "main": {
+            "score": round(main_score, 2),
+            "rating": rating,
+            "timestamp": trade_date,
+            "timestamp_cn": format_beijing_timestamp(trade_date),
+            "previous_close": None,
+            "previous_1_week": None,
+            "previous_1_month": None,
+            "previous_1_year": None,
+        },
+        "history": history_points,
+        "subs": sub_indicators
+    }
+
+def persist_cn_sentiment(trade_date, main, subs):
+    """将当日情绪指标追加到CSV"""
+    CN_HISTORY_CSV.parent.mkdir(parents=True, exist_ok=True)
+    row = {
+        "trade_date": trade_date,
+        "score": main.get("score"),
+        "rating": main.get("rating"),
+    }
+    for item in subs:
+        key = item["label"]
+        # 简化列名
+        col = {
+            "市场动量(沪深300/125日均)": "momentum",
+            "价格广度(上涨家数占比)": "breadth",
+            "价格强度(涨停-跌停占比)": "strength",
+            "波动率(反向)": "volatility",
+            "平均涨跌幅": "avgret",
+        }.get(key, key)
+        row[f"{col}_val"] = item.get("value")
+        row[f"{col}_score"] = item.get("score")
+    df_new = pd.DataFrame([row])
+    if CN_HISTORY_CSV.exists():
+        # 若已存在当日记录则不重复写入
+        df_old = pd.read_csv(CN_HISTORY_CSV)
+        if str(trade_date) in df_old["trade_date"].astype(str).values:
+            return
+    df_new.to_csv(CN_HISTORY_CSV, mode='a', index=False, header=not CN_HISTORY_CSV.exists())
+
+def load_cn_history():
+    if not CN_HISTORY_CSV.exists():
+        return []
+    df = pd.read_csv(CN_HISTORY_CSV)
+    df = df.sort_values("trade_date")
+    return df.to_dict(orient="records")
+
+def build_subs_from_record(rec):
+    """从历史记录重建细分指标列表"""
+    mapping = [
+        ("市场动量(沪深300/125日均)", "momentum_val", "momentum_score"),
+        ("价格广度(上涨家数占比)", "breadth_val", "breadth_score"),
+        ("价格强度(涨停-跌停占比)", "strength_val", "strength_score"),
+        ("波动率(反向)", "volatility_val", "volatility_score"),
+        ("平均涨跌幅", "avgret_val", "avgret_score"),
+        ("沪深300期权PCR(IO)", "pcr_val", "pcr_score"),
+    ]
+    subs = []
+    for label, val_key, score_key in mapping:
+        val = rec.get(val_key)
+        score_val = rec.get(score_key)
+        subs.append({
+            "label": label,
+            "value": val,
+            "score": score_val,
+            "rating": score_rating(score_val) if score_val is not None else None
+        })
+    return subs
 @app.template_filter('format_date')
 def format_date(date_obj, fmt='%Y-%m-%d'):
     """日期格式化过滤器"""
@@ -149,10 +339,10 @@ def index():
 def fear_greed():
     try:
         payload = fetch_fear_greed()
-        main, history_points, sub_list = parse_fear_greed_payload(payload)
+        main, history_points, sub_list, extras = parse_fear_greed_payload(payload)
     except Exception as e:
         Logger.error(f"fetch fear & greed failed: {e}")
-        main, history_points, sub_list = {}, [], []
+        main, history_points, sub_list, extras = {}, [], [], {}
         error = "获取CNN Fear & Greed数据失败，请稍后再试。"
     else:
         error = None
@@ -162,6 +352,60 @@ def fear_greed():
         main=main,
         history=history_points[:120],
         sub_indicators=sub_list,
+        extras=extras,
+        error=error
+    )
+
+@app.route('/cn-fear')
+def cn_fear():
+    trade_date = request.args.get("trade_date")
+    if trade_date and "-" in trade_date:
+        trade_date = trade_date.replace("-", "")
+    try:
+        result = compute_cn_sentiment(trade_date)
+        if result:
+            persist_cn_sentiment(result["trade_date"], result["main"], result["subs"])
+    except Exception as e:
+        Logger.error(f"compute cn fear failed: {e}")
+        result = None
+
+    history_records = load_cn_history()
+
+    if not result and not history_records:
+        error = "获取当日行情或计算情绪失败，请稍后重试。"
+        main = {}
+        history = []
+        subs = []
+    else:
+        error = None if result else "当日计算失败，显示历史数据。"
+        if result:
+            main = result["main"]
+            subs = result["subs"]
+        else:
+            last = history_records[-1]
+            main = {
+                "score": last.get("score"),
+                "rating": last.get("rating"),
+                "timestamp": last.get("trade_date"),
+                "timestamp_cn": format_beijing_timestamp(str(last.get("trade_date"))),
+            }
+            subs = build_subs_from_record(last)
+        history = [
+            {
+                "x": int(datetime.datetime.strptime(str(rec["trade_date"]), "%Y%m%d").timestamp() * 1000),
+                "y": rec.get("score"),
+                "rating": rec.get("rating"),
+            }
+            for rec in history_records
+        ]
+
+    return render_template(
+        'cn_fear.html',
+        main=main,
+        history=history,
+        sub_indicators=subs,
+        trade_date=trade_date or (result["trade_date"] if result else None),
+        history_table=history_records[::-1],  # 逆序便于展示最近的
         error=error
     )
 
