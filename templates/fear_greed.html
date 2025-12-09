@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>市场情绪监控 - CNN Fear & Greed</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container py-4">
+        <header class="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center mb-4">
+            <div>
+                <p class="text-muted small mb-1">CNN Markets • Fear & Greed</p>
+                <h1 class="display-6 fw-bold">市场情绪监控</h1>
+                <p class="text-muted mb-0">实时监控最新恐惧与贪婪指数及七大细分指标</p>
+            </div>
+            <div class="d-flex gap-2 mt-3 mt-lg-0">
+                <a href="{{ url_for('index') }}" class="btn btn-outline-primary"><i class="bi bi-funnel"></i> 股票筛选</a>
+                <a href="{{ url_for('backtest_page') }}" class="btn btn-outline-success"><i class="bi bi-graph-up"></i> 策略回测</a>
+            </div>
+        </header>
+
+        {% if error %}
+        <div class="alert alert-danger">{{ error }}</div>
+        {% endif %}
+
+        <div class="row g-3 mb-4">
+            <div class="col-lg-5">
+                <div class="card shadow-sm border-0 fg-hero">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="badge bg-dark">主指标</span>
+                            <span class="text-muted small">最近更新: {{ main.timestamp }}</span>
+                        </div>
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="fg-score text-center">
+                                <div class="fg-score-value">{{ (main.score or 0) | round(1) }}</div>
+                                <div class="fg-score-label">Fear & Greed</div>
+                            </div>
+                            <div class="flex-grow-1">
+                                <div class="d-flex align-items-center gap-2 mb-2">
+                                    <span class="badge {{ main.rating|default('neutral') | replace(' ', '-') }}-pill text-uppercase">{{ main.rating or 'n/a' }}</span>
+                                    <span class="text-muted small">0 (极度恐惧) - 100 (极度贪婪)</span>
+                                </div>
+                                <div class="fg-metrics">
+                                    <div class="fg-metric">
+                                        <span class="text-muted">前收:</span>
+                                        <strong>{{ main.previous_close or '—' }}</strong>
+                                    </div>
+                                    <div class="fg-metric">
+                                        <span class="text-muted">1周前:</span>
+                                        <strong>{{ main.previous_1_week or '—' }}</strong>
+                                    </div>
+                                    <div class="fg-metric">
+                                        <span class="text-muted">1月前:</span>
+                                        <strong>{{ main.previous_1_month or '—' }}</strong>
+                                    </div>
+                                    <div class="fg-metric">
+                                        <span class="text-muted">1年前:</span>
+                                        <strong>{{ main.previous_1_year or '—' }}</strong>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-7">
+                <div class="card shadow-sm border-0 h-100">
+                    <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">历史走势</h5>
+                        <span class="text-muted small">最近 {{ history|length }} 个数据点</span>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="history-chart" height="110"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white border-0">
+                <h5 class="mb-0">细分指标</h5>
+                <p class="text-muted small mb-0">CNN 拆分的市场动量、价格强度、期权、波动率、债券与避险需求等七个维度</p>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    {% for item in sub_indicators %}
+                    <div class="col-12 col-md-6 col-lg-4">
+                        <div class="indicator-card border rounded p-3 h-100">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <div class="fw-bold">{{ item.label }}</div>
+                                <span class="badge {{ item.rating|default('neutral') | replace(' ', '-') }}-pill text-uppercase">{{ item.rating or 'n/a' }}</span>
+                            </div>
+                            <div class="d-flex align-items-end gap-2">
+                                <div class="display-6 fw-bold mb-0">{{ item.score or '—' }}</div>
+                                <span class="text-muted small">评分</span>
+                            </div>
+                            <div class="text-muted small mt-2">最近更新: {{ item.timestamp }}</div>
+                            {% if item.chart %}
+                            <div class="small text-muted mt-2">近期走势(近{{ item.chart|length }}期)</div>
+                            <canvas class="sub-chart mt-2" data-points='{{ item.chart|tojson }}' height="60"></canvas>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
+    <script>
+        const historyData = {{ history | tojson }};
+        const subIndicators = {{ sub_indicators | tojson }};
+
+        function ratingColor(rating) {
+            if (!rating) return '#6c757d';
+            const key = rating.toLowerCase();
+            if (key.includes('extreme fear')) return '#dc3545';
+            if (key.includes('fear')) return '#fd7e14';
+            if (key.includes('neutral')) return '#6c757d';
+            if (key.includes('greed')) return '#198754';
+            return '#6c757d';
+        }
+
+        function renderHistory() {
+            if (!historyData || !historyData.length) return;
+            const ctx = document.getElementById('history-chart').getContext('2d');
+            const labels = historyData.map(p => new Date(p.x).toLocaleDateString());
+            const values = historyData.map(p => p.y);
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Fear & Greed',
+                        data: values,
+                        borderColor: '#0d6efd',
+                        backgroundColor: 'rgba(13, 110, 253, 0.08)',
+                        borderWidth: 2,
+                        fill: true,
+                        pointRadius: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    scales: {
+                        y: { beginAtZero: true, max: 100, ticks: { stepSize: 20 } },
+                        x: { ticks: { maxTicksLimit: 6 } }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { callbacks: { label: ctx => `指数: ${ctx.parsed.y.toFixed(1)}` } }
+                    }
+                }
+            });
+        }
+
+        function renderSubCharts() {
+            document.querySelectorAll('.sub-chart').forEach((canvas, idx) => {
+                const points = JSON.parse(canvas.dataset.points || '[]');
+                if (!points.length) return;
+                const dataY = points.map(p => p.y);
+                new Chart(canvas.getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        labels: points.map(p => ''),
+                        datasets: [{
+                            data: dataY,
+                            borderColor: ratingColor(subIndicators[idx].rating),
+                            backgroundColor: 'rgba(0,0,0,0)',
+                            borderWidth: 2,
+                            tension: 0.3,
+                            pointRadius: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: { y: { display: false }, x: { display: false } },
+                        plugins: { legend: { display: false }, tooltip: { enabled: false } }
+                    }
+                });
+            });
+        }
+
+        renderHistory();
+        renderSubCharts();
+    </script>
+</body>
+</html>

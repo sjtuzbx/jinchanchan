@@ -81,3 +81,58 @@ canvas {
         max-height: 200px;
     }
 }
+
+/* 恐惧与贪婪监控页 */
+.fg-hero {
+    background: linear-gradient(135deg, #0d6efd 0%, #0dcaf0 100%);
+    color: #fff;
+}
+
+.fg-hero .card-body {
+    color: #fff;
+}
+
+.fg-score-value {
+    font-size: 3rem;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.fg-score-label {
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 0.85rem;
+    opacity: 0.9;
+}
+
+.fg-metrics {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.4rem 1rem;
+    margin-top: 0.5rem;
+}
+
+.fg-metric span {
+    font-size: 0.85rem;
+}
+
+.indicator-card {
+    background: #fff;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.05);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.indicator-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+}
+
+.sub-chart {
+    width: 100%;
+}
+
+.extreme-fear-pill { background: #dc3545; }
+.fear-pill { background: #fd7e14; }
+.neutral-pill { background: #6c757d; }
+.greed-pill { background: #28a745; }
+.extreme-greed-pill { background: #198754; }

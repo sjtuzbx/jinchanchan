@@ -12,6 +12,7 @@ from backtest.backtester import Backtester
 from backtest.data_manager import change_ts
 from logger import Logger
 import traceback
+import requests
 
 import tushare as ts
 
@@ -23,6 +24,13 @@ exchange_name_dict = {
 
 token = "1e266a5110f1d8fd926d3af0d034458b9d5c904636c72c723ab9fa38"
 pro = ts.pro_api(token)
+
+FEAR_GREED_URL = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
+FEAR_GREED_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+    "Accept": "application/json, text/plain, */*",
+    "Referer": "https://www.cnn.com/markets/fear-and-greed"
+}
 
 app = Flask(__name__)
 
@@ -51,6 +59,44 @@ def handle_global_exception(e):
     Logger.error(f"Uncaught exception occurred:{str(e)}")
     Logger.error("traceback:\n" + traceback.format_exc())
 
+def fetch_fear_greed():
+    """拉取CNN恐惧与贪婪指数数据"""
+    resp = requests.get(FEAR_GREED_URL, headers=FEAR_GREED_HEADERS, timeout=10)
+    resp.raise_for_status()
+    return resp.json()
+
+def parse_fear_greed_payload(payload):
+    """整理主指标和子指标数据，便于模板展示"""
+    main = payload.get('fear_and_greed', {})
+    history_points = payload.get('fear_and_greed_historical', {}).get('data', [])
+
+    indicator_name_map = {
+        'market_momentum_sp500': '市场动量(S&P 500)',
+        'market_momentum_sp125': '市场动量(S&P 125日均线)',
+        'stock_price_strength': '价格强度(52周新高/低)',
+        'stock_price_breadth': '价格广度(涨跌比)',
+        'put_call_options': '期权看跌看涨比',
+        'market_volatility_vix': '波动率(VIX)',
+        'market_volatility_vix_50': '波动率(VIX 50日均线)',
+        'junk_bond_demand': '高收益债需求',
+        'safe_haven_demand': '避险需求'
+    }
+
+    sub_list = []
+    for key, label in indicator_name_map.items():
+        item = payload.get(key)
+        if not isinstance(item, dict):
+            continue
+        sub_list.append({
+            'key': key,
+            'label': label,
+            'score': item.get('score'),
+            'rating': item.get('rating'),
+            'timestamp': item.get('timestamp'),
+            'chart': item.get('data', [])[:60],  # 近期数据，防止过长
+        })
+
+    return main, history_points, sub_list
 @app.template_filter('format_date')
 def format_date(date_obj, fmt='%Y-%m-%d'):
     """日期格式化过滤器"""
@@ -68,6 +114,26 @@ def index():
     return render_template('index.html', 
                            today=TODAY,
                            default_date=(datetime.date.today()).isoformat())
+
+@app.route('/fear-greed')
+def fear_greed():
+    try:
+        payload = fetch_fear_greed()
+        main, history_points, sub_list = parse_fear_greed_payload(payload)
+    except Exception as e:
+        Logger.error(f"fetch fear & greed failed: {e}")
+        main, history_points, sub_list = {}, [], []
+        error = "获取CNN Fear & Greed数据失败，请稍后再试。"
+    else:
+        error = None
+
+    return render_template(
+        'fear_greed.html',
+        main=main,
+        history=history_points[:120],
+        sub_indicators=sub_list,
+        error=error
+    )
 
 @app.route('/screener', methods=['POST'])
 def run_screener():
