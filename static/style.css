@@ -161,10 +161,6 @@ canvas {
 .sub-chart {
     width: 100%;
 }
-.wide-chart {
-    width: 100%;
-    height: 220px;
-}
 .extreme-fear-pill { background: #f25555; color: #fff; }
 .fear-pill { background: #ff9f43; color: #fff; }
 .neutral-pill { background: #c5c9d2; color: #28313c; }
