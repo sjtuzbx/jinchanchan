@@ -146,7 +146,11 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@1.2.1/dist/chartjs-plugin-zoom.min.js"></script>
     <script>
+        if (window.Chart && window.ChartZoom) {
+            Chart.register(ChartZoom);
+        }
         let performanceChart = null;
         let drawdownChart = null;
         let monthlyReturnChart = null;
@@ -215,32 +219,38 @@
             });
         }
 
+        function pct(value, absolute=false) {
+            const target = value ?? 0;
+            const base = absolute ? Math.abs(target) : target;
+            return (base * 100).toFixed(2) + '%';
+        }
+
         function displayBacktestResults(data) {
             const resultsContent = document.getElementById('results-content');
-            const pct = v => (v * 100).toFixed(2) + '%';
             const num = v => Number(v).toFixed(2);
             resultsContent.innerHTML = `
                 <div class="row g-3 mb-3">
                     <div class="col-md-3"><div class="indicator-card"><div class="muted small">年化收益</div><div class="h4 mb-0 ${data.annual_return>0?'text-success':'text-danger'}">${pct(data.annual_return)}</div></div></div>
                     <div class="col-md-3"><div class="indicator-card"><div class="muted small">夏普比率</div><div class="h4 mb-0">${num(data.sharpe_ratio)}</div></div></div>
-                    <div class="col-md-3"><div class="indicator-card"><div class="muted small">最大回撤</div><div class="h4 mb-0 text-danger">${pct(data.max_drawdown)}</div></div></div>
+                    <div class="col-md-3"><div class="indicator-card"><div class="muted small">最大回撤</div><div class="h4 mb-0 text-danger">${pct(data.max_drawdown, true)}</div></div></div>
                     <div class="col-md-3"><div class="indicator-card"><div class="muted small">超额收益</div><div class="h4 mb-0 ${data.excess_return>0?'text-success':'text-danger'}">${pct(data.excess_return)}</div></div></div>
                 </div>
-                <div class="row g-3">
-                    <div class="col-lg-8">
-                        <div class="card">
-                            <div class="card-header d-flex justify-content-between align-items-center">
-                                <div>策略表现对比</div>
-                                <span class="muted small">基准：${data.benchmark}</span>
-                            </div>
-                            <div class="card-body"><canvas id="performance-chart" height="280"></canvas></div>
+                <div class="card mb-3">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <div>策略表现对比</div>
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="muted small">基准：${data.benchmark}</span>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="resetPerformanceZoom()">重置缩放</button>
                         </div>
                     </div>
-                    <div class="col-lg-4">
-                        <div class="card h-100">
-                            <div class="card-header">回撤曲线</div>
-                            <div class="card-body"><canvas id="drawdown-chart" height="280"></canvas></div>
-                        </div>
+                    <div class="card-body">
+                        <canvas id="performance-chart" height="340"></canvas>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header">回撤曲线</div>
+                    <div class="card-body">
+                        <canvas id="drawdown-chart" height="260"></canvas>
                     </div>
                 </div>
             `;
@@ -251,8 +261,32 @@
             }, 50);
         }
 
+        function resetPerformanceZoom() {
+            if (performanceChart && performanceChart.resetZoom) {
+                performanceChart.resetZoom();
+            }
+        }
+
+        function getPerformanceScaleBounds(chartData) {
+            const values = []
+                .concat(chartData.strategy || [])
+                .concat(chartData.benchmark || [])
+                .filter(v => typeof v === 'number' && !Number.isNaN(v));
+            if (!values.length) {
+                return { min: undefined, max: undefined };
+            }
+            const min = Math.min(...values);
+            const max = Math.max(...values);
+            const range = max - min || min * 0.05 || 0.05;
+            return {
+                min: Math.max(min - range * 0.5, 0),
+                max: max + range * 0.2
+            };
+        }
+
         function renderPerformanceChart(chartData) {
             const ctx = document.getElementById('performance-chart').getContext('2d');
+            const yBounds = getPerformanceScaleBounds(chartData);
             performanceChart = new Chart(ctx, {
                 type: 'line',
                 data: {
@@ -265,30 +299,53 @@
                 options: {
                     responsive: true,
                     interaction: { mode: 'index', intersect: false },
-                    scales: { y: { type: 'logarithmic' }, x: { ticks: { maxRotation: 30, minRotation: 30 } } },
-                    plugins: { legend: { display: true } }
+                    scales: { 
+                        y: { 
+                            type: 'linear',
+                            beginAtZero: false,
+                            min: yBounds.min,
+                            max: yBounds.max,
+                            ticks: { callback: v => v.toFixed(2) }
+                        }, 
+                        x: { ticks: { maxRotation: 30, minRotation: 30 } } 
+                    },
+                    plugins: { 
+                        legend: { display: true },
+                        zoom: {
+                            pan: { enabled: true, mode: 'x', modifierKey: 'shift' },
+                            zoom: {
+                                wheel: { enabled: true },
+                                pinch: { enabled: true },
+                                drag: { enabled: true, backgroundColor: 'rgba(15,156,245,0.08)' },
+                                mode: 'x'
+                            }
+                        }
+                    }
                 }
             });
         }
 
         function renderDrawdownChart(drawdownData) {
             const ctx = document.getElementById('drawdown-chart').getContext('2d');
+            const absValues = (drawdownData.values || []).map(v => Math.abs(v ?? 0));
+            const maxDrawdown = absValues.length ? Math.max(...absValues) : 0.05;
             drawdownChart = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: drawdownData.labels,
-                    datasets: [{ label: '回撤', data: drawdownData.values, borderColor: '#f25555', backgroundColor: 'rgba(242,85,85,0.12)', borderWidth: 2, fill: true, pointRadius: 0 }]
+                    datasets: [{ label: '回撤', data: absValues, borderColor: '#f25555', backgroundColor: 'rgba(242,85,85,0.12)', borderWidth: 2, fill: true, pointRadius: 0 }]
                 },
                 options: {
                     responsive: true,
                     scales: {
-                        y: { beginAtZero: true, max: 0, min: Math.min(...drawdownData.values)-0.05, ticks: { callback: v => (v*100).toFixed(0)+'%' } },
+                        y: { beginAtZero: true, suggestedMax: maxDrawdown * 1.2, reverse: true, ticks: { callback: v => (v*100).toFixed(0)+'%' } },
                         x: { ticks: { maxRotation: 30, minRotation: 30 } }
                     },
                     plugins: { legend: { display: false } }
                 }
             });
         }
+
     </script>
 </body>
 </html>
