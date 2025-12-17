@@ -243,8 +243,8 @@
 
         function displayBacktestResults(data) {
             const resultsContent = document.getElementById('results-content');
-            positionHistoryData = data.position_history || [];
-            tradeHistoryData = data.trade_history || [];
+            positionHistoryData = [...(data.position_history || [])].reverse();
+            tradeHistoryData = [...(data.trade_history || [])].reverse();
             positionPage = 1;
             tradePage = 1;
             const num = v => Number(v).toFixed(2);

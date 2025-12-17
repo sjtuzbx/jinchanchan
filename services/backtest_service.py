@@ -52,4 +52,7 @@ class BacktestService:
         for key in ['sharpe_ratio', 'annual_return', 'max_drawdown']:
             if key in result:
                 result[key] = float(result[key])
+
+        # from IPython import embed
+        # embed()
         return result
