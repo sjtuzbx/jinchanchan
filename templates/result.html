@@ -25,6 +25,13 @@
         </div>
 
         <div class="container py-4">
+            {% if error %}
+            <div class="alert alert-danger d-flex align-items-center" role="alert">
+                <i class="bi bi-exclamation-octagon me-2"></i>
+                <div>筛选失败：{{ error }}</div>
+            </div>
+            {% endif %}
+
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <div>
                     <div class="console-breadcrumb">股票筛选 / 结果</div>
@@ -93,10 +100,10 @@
                                     <th>总市值(亿元)</th>
                                     <th>季度扣非PE</th>
                                     <th>扣除商誉PB</th>
+                                    <th>EWMA成交额(万元)</th>
                                     <th>季度扣非净利润(亿元)</th>
                                     <th>商誉(亿元)</th>
                                     <th>净资产(亿元)</th>
-                                    <!-- <th>成交额(万元)</th> -->
                                     <th>是否ST</th>
                                     <th>评分</th>
                                 </tr>
@@ -114,10 +121,10 @@
                                         stock.quarterly_pe|round(2) }}</td>
                                     <td class="{% if stock.adjusted_pb <= 0 %}text-danger{% endif %}">{{
                                         stock.adjusted_pb|round(2) }}</td>
+                                    <td>{{ stock.ewm_amount|round(2) if stock.ewm_amount is not none else '-' }}</td>
                                     <td>{{ stock.quarterly_net_profit|round(4) }}</td>
                                     <td>{{ stock.goodwill|round(4) }}</td>
                                     <td>{{ stock.net_assets|round(2) }}</td>
-                                    <!-- <td>{{ stock.ewm_amount|round(2) }}</td> -->
                                     <td>
                                         {% if stock.is_st %}
                                         <span class="badge bg-danger">ST</span>

@@ -66,6 +66,10 @@ def handle_global_exception(e):
     """记录错误和堆栈"""
     Logger.error(f"Uncaught exception occurred:{str(e)}")
     Logger.error("traceback:\n" + traceback.format_exc())
+    # 确保返回有效的响应，避免 Flask 抛出 TypeError
+    if request.accept_mimetypes.accept_json and not request.accept_mimetypes.accept_html:
+        return jsonify({"error": "internal server error", "message": str(e)}), 500
+    return make_response(f"Internal Server Error: {e}", 500)
 
 def format_beijing_timestamp(ts):
     """将时间戳/ISO字符串转为北京时间字符串"""
@@ -449,7 +453,7 @@ def run_screener():
             screener.strategy_name_dict['select_strategy'][mapping[k]]['exclude'] = False
 
     if not filter_pe_gt_zero:
-        del screener.strategy_name_dict['select_strategy']['xsz_strategy']
+        screener.strategy_name_dict['select_strategy'].pop('xsz_strategy', None)
     else:
         screener.strategy_name_dict['select_strategy']['xsz_strategy'] = {}
 
@@ -458,20 +462,27 @@ def run_screener():
     print(filter_date, type(filter_date))
     print('strategy_name_dict', screener.strategy_name_dict)
     
-    # 应用筛选条件获取股票数据
-    stocks = screener.select(date2int(filter_date))
+    error_msg = None
+    try:
+        # 应用筛选条件获取股票数据
+        stocks = screener.select(date2int(filter_date)) or []
+    except Exception as e:
+        Logger.error(f"run_screener failed: {e}")
+        Logger.error(traceback.format_exc())
+        stocks = []
+        error_msg = str(e)
 
     res = []
     c2 = time.time()
     print('c2 = ', c2 - c1)
-    is_st_dg = screener.dm.is_st(screener.stock_list, date2int(filter_date))
-    close_dg = screener.dm.close(screener.stock_list, date2int(filter_date), adj=False)
-    total_mv = screener.dm.total_mv(screener.stock_list, date2int(filter_date)) * 1e4
-    net_assets = screener.dm.net_assets(screener.stock_list, date2int(filter_date))
-    goodwill = np.nan_to_num(screener.dm.goodwill(screener.stock_list, date2int(filter_date)))
-    profit_dedtQ = screener.dm.profit_dedtQ(screener.stock_list, date2int(filter_date))
-    ewm_amount = screener.dm.ewm_amount(screener.stock_list, date2int(filter_date))
-
+    if stocks:
+        is_st_dg = screener.dm.is_st(screener.stock_list, date2int(filter_date))
+        close_dg = screener.dm.close(screener.stock_list, date2int(filter_date), adj=False)
+        total_mv = screener.dm.total_mv(screener.stock_list, date2int(filter_date)) * 1e4
+        net_assets = screener.dm.net_assets(screener.stock_list, date2int(filter_date))
+        goodwill = np.nan_to_num(screener.dm.goodwill(screener.stock_list, date2int(filter_date)))
+        profit_dedtQ = screener.dm.profit_dedtQ(screener.stock_list, date2int(filter_date))
+        ewm_amount = screener.dm.ewm_amount(screener.stock_list, date2int(filter_date))
 
 
     c3 = time.time()
@@ -482,6 +493,12 @@ def run_screener():
         idx = np.where(screener.stock_list == code)[0][0]
         # print(idx, is_st_dg.shape, is_st_dg[idx])
         data = pro.stock_basic(ts_code=change_ts(str(code)), fields='ts_code,symbol,name,exchange')
+        # ewm_val = None
+        # if ewm_amount is not None:
+        #     try:
+        #         ewm_val = float(ewm_amount[-1, idx]) if hasattr(ewm_amount, "ndim") and ewm_amount.ndim >= 2 else float(ewm_amount[idx])
+        #     except Exception:
+        #         Logger.error(f"ewm_amount parse failed for {code}")
         avg_total_mv.append(total_mv[idx])
         res.append({'index': index, 'score': score, 'id': str(code), 'name': data.name.values[0], 'exchange_name': exchange_name_dict[data.exchange.values[0]], 
         'is_st': bool(is_st_dg[idx]), 'closing_price': close_dg[idx], 
@@ -490,13 +507,14 @@ def run_screener():
         'quarterly_net_profit': profit_dedtQ[idx] / 1e8, 
         'goodwill': goodwill[idx] / 1e8 , 
         'net_assets': net_assets[idx] / 1e8, 
-        'adjusted_pb': total_mv[idx] / (net_assets[idx] - goodwill[idx])
+        'adjusted_pb': total_mv[idx] / (net_assets[idx] - goodwill[idx]),
+        'ewm_amount': ewm_amount[-1, idx] / 10 
         })
-        # 'ewm_amount': ewm_amount[idx] * 1e4})
 
         index += 1
 
-    print('avg is ', np.mean(avg_total_mv[:20]))
+    if avg_total_mv:
+        print('avg is ', np.mean(avg_total_mv[:20]))
     # 准备交易所筛选数据
     exchange_data = get_exchange_filter()
     
@@ -507,6 +525,7 @@ def run_screener():
     # 渲染结果页面
     return render_template('result.html', 
                            stocks=res,
+                           error=error_msg,
                            filter_date=filter_date,
                            exclude_exchanges=exclude_exchanges,
                            exclude_st=exclude_st,
@@ -667,4 +686,4 @@ def generate_backtest_results(params):
     }
 
 if __name__ == '__main__':
-    app.run('0.0.0.0')
+    app.run('0.0.0.0', port=5001)
