@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,6 +9,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.0/font/bootstrap-icons.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
+
 <body>
     <div class="console-shell">
         <div class="console-header py-3">
@@ -46,11 +48,14 @@
                                 <label class="form-label fw-bold">排除交易所</label>
                                 <div class="border rounded p-3 mb-3">
                                     <div class="row g-2">
-                                        {% for code,label in [('main','主板'),('kcb','科创板'),('cyb','创业板'),('bse','北交所')] %}
+                                        {% for code,label in [('main','主板'),('kcb','科创板'),('cyb','创业板'),('bse','北交所')]
+                                        %}
                                         <div class="col-6">
                                             <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" value="{{ code }}" name="exclude_exchanges[]" id="exclude-{{ code }}">
-                                                <label class="form-check-label" for="exclude-{{ code }}">{{ label }}</label>
+                                                <input class="form-check-input" type="checkbox" value="{{ code }}"
+                                                    name="exclude_exchanges[]" id="exclude-{{ code }}">
+                                                <label class="form-check-label" for="exclude-{{ code }}">{{ label
+                                                    }}</label>
                                             </div>
                                         </div>
                                         {% endfor %}
@@ -59,11 +64,13 @@
                                 <label class="form-label fw-bold">筛选开关</label>
                                 <div class="border rounded p-3">
                                     <div class="form-check mb-2">
-                                        <input class="form-check-input" type="checkbox" value="true" name="exclude_st" id="exclude-st">
+                                        <input class="form-check-input" type="checkbox" value="true" name="exclude_st"
+                                            id="exclude-st">
                                         <label class="form-check-label" for="exclude-st">排除ST/*ST股票</label>
                                     </div>
                                     <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" value="true" name="filter_pe_gt_zero" id="filter-pe" checked>
+                                        <input class="form-check-input" type="checkbox" value="true"
+                                            name="filter_pe_gt_zero" id="filter-pe" checked>
                                         <label class="form-check-label" for="filter-pe">季度扣非PE>0 且扣除商誉PB>0</label>
                                     </div>
                                 </div>
@@ -82,23 +89,23 @@
                                 <div class="row g-3">
                                     <div class="col-md-6">
                                         <label class="form-label fw-bold">起始日期</label>
-                                        <input type="date" class="form-control" id="start-date" 
-                                               value="{{ start_date |format_date }}" required>
+                                        <input type="date" class="form-control" id="start-date"
+                                            value="{{ start_date |format_date }}" required>
                                     </div>
                                     <div class="col-md-6">
                                         <label class="form-label fw-bold">结束日期</label>
-                                        <input type="date" class="form-control" id="end-date" 
-                                               value="{{ end_date |format_date }}" required>
+                                        <input type="date" class="form-control" id="end-date"
+                                            value="{{ end_date |format_date }}" required>
                                     </div>
                                     <div class="col-md-6">
                                         <label class="form-label fw-bold">持有股票数</label>
-                                        <input type="number" class="form-control" id="hold-stocks" 
-                                               min="1" max="50" value="10" required>
+                                        <input type="number" class="form-control" id="hold-stocks" min="1" max="50"
+                                            value="10" required>
                                     </div>
                                     <div class="col-md-6">
                                         <label class="form-label fw-bold">调仓周期</label>
-                                        <input type="number" class="form-control" id="rebalance-period" 
-                                               min="1" max="50" value="5" required>
+                                        <input type="number" class="form-control" id="rebalance-period" min="1" max="50"
+                                            value="5" required>
                                     </div>
                                     <div class="col-md-6">
                                         <label class="form-label fw-bold">权重</label>
@@ -112,11 +119,13 @@
                                         <label class="form-label fw-bold">调仓时点</label>
                                         <div class="d-flex align-items-center gap-3">
                                             <div class="form-check">
-                                                <input class="form-check-input" type="radio" name="rebalance-time" id="open-price" value="open" checked>
+                                                <input class="form-check-input" type="radio" name="rebalance-time"
+                                                    id="open-price" value="open" checked>
                                                 <label class="form-check-label" for="open-price">开盘价</label>
                                             </div>
                                             <div class="form-check">
-                                                <input class="form-check-input" type="radio" name="rebalance-time" id="close-price" value="close">
+                                                <input class="form-check-input" type="radio" name="rebalance-time"
+                                                    id="close-price" value="close">
                                                 <label class="form-check-label" for="close-price">收盘价</label>
                                             </div>
                                         </div>
@@ -191,9 +200,9 @@
                 </div>
             `;
 
-            if(performanceChart) { performanceChart.destroy(); performanceChart=null; }
-            if(drawdownChart) { drawdownChart.destroy(); drawdownChart=null; }
-            if(monthlyReturnChart) { monthlyReturnChart.destroy(); monthlyReturnChart=null; }
+            if (performanceChart) { performanceChart.destroy(); performanceChart = null; }
+            if (drawdownChart) { drawdownChart.destroy(); drawdownChart = null; }
+            if (monthlyReturnChart) { monthlyReturnChart.destroy(); monthlyReturnChart = null; }
 
             fetch('/backtest', {
                 method: 'POST',
@@ -219,7 +228,7 @@
             });
         }
 
-        function pct(value, absolute=false) {
+        function pct(value, absolute = false) {
             const target = value ?? 0;
             const base = absolute ? Math.abs(target) : target;
             return (base * 100).toFixed(2) + '%';
@@ -230,10 +239,10 @@
             const num = v => Number(v).toFixed(2);
             resultsContent.innerHTML = `
                 <div class="row g-3 mb-3">
-                    <div class="col-md-3"><div class="indicator-card"><div class="muted small">年化收益</div><div class="h4 mb-0 ${data.annual_return>0?'text-success':'text-danger'}">${pct(data.annual_return)}</div></div></div>
+                    <div class="col-md-3"><div class="indicator-card"><div class="muted small">年化收益</div><div class="h4 mb-0 ${data.annual_return > 0 ? 'text-success' : 'text-danger'}">${pct(data.annual_return)}</div></div></div>
                     <div class="col-md-3"><div class="indicator-card"><div class="muted small">夏普比率</div><div class="h4 mb-0">${num(data.sharpe_ratio)}</div></div></div>
                     <div class="col-md-3"><div class="indicator-card"><div class="muted small">最大回撤</div><div class="h4 mb-0 text-danger">${pct(data.max_drawdown, true)}</div></div></div>
-                    <div class="col-md-3"><div class="indicator-card"><div class="muted small">超额收益</div><div class="h4 mb-0 ${data.excess_return>0?'text-success':'text-danger'}">${pct(data.excess_return)}</div></div></div>
+                    <div class="col-md-3"><div class="indicator-card"><div class="muted small">超额收益</div><div class="h4 mb-0 ${data.excess_return > 0 ? 'text-success' : 'text-danger'}">${pct(data.excess_return)}</div></div></div>
                 </div>
                 <div class="card mb-3">
                     <div class="card-header d-flex justify-content-between align-items-center">
@@ -255,6 +264,8 @@
                 </div>
             `;
 
+            console.log("data.chart_data", data.chart_data)
+            console.log("data.drawdown_data", data.drawdown_data)
             setTimeout(() => {
                 renderPerformanceChart(data.chart_data);
                 renderDrawdownChart(data.drawdown_data);
@@ -293,23 +304,23 @@
                     labels: chartData.labels,
                     datasets: [
                         { label: '策略组合', data: chartData.strategy, borderColor: '#0f9cf5', backgroundColor: 'rgba(15,156,245,0.12)', borderWidth: 2, fill: true, pointRadius: 0 },
-                        { label: '基准指数', data: chartData.benchmark, borderColor: '#fd7e14', backgroundColor: 'rgba(253,126,20,0.08)', borderWidth: 2, borderDash: [5,5], fill: false, pointRadius: 0 }
+                        { label: '基准指数', data: chartData.benchmark, borderColor: '#fd7e14', backgroundColor: 'rgba(253,126,20,0.08)', borderWidth: 2, borderDash: [5, 5], fill: false, pointRadius: 0 }
                     ]
                 },
                 options: {
                     responsive: true,
                     interaction: { mode: 'index', intersect: false },
-                    scales: { 
-                        y: { 
+                    scales: {
+                        y: {
                             type: 'linear',
                             beginAtZero: false,
                             min: yBounds.min,
                             max: yBounds.max,
                             ticks: { callback: v => v.toFixed(2) }
-                        }, 
-                        x: { ticks: { maxRotation: 30, minRotation: 30 } } 
+                        },
+                        x: { ticks: { maxRotation: 30, minRotation: 30 } }
                     },
-                    plugins: { 
+                    plugins: {
                         legend: { display: true },
                         zoom: {
                             pan: { enabled: true, mode: 'x', modifierKey: 'shift' },
@@ -327,18 +338,38 @@
 
         function renderDrawdownChart(drawdownData) {
             const ctx = document.getElementById('drawdown-chart').getContext('2d');
-            const absValues = (drawdownData.values || []).map(v => Math.abs(v ?? 0));
-            const maxDrawdown = absValues.length ? Math.max(...absValues) : 0.05;
+            const values = (drawdownData.values || []).map(v => {
+                const parsed = Number(v);
+                return Number.isFinite(parsed) ? parsed : 0;
+            });
+            const minDrawdown = values.length ? Math.min(...values) : -0.01;
+            const padding = Math.abs(minDrawdown) * 0.15 || 0.01;
+            console.log("drawdownData.values  ", drawdownData.values)
+            console.log(values)
             drawdownChart = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: drawdownData.labels,
-                    datasets: [{ label: '回撤', data: absValues, borderColor: '#f25555', backgroundColor: 'rgba(242,85,85,0.12)', borderWidth: 2, fill: true, pointRadius: 0 }]
+                    datasets: [{
+                        label: '回撤',
+                        data: values,
+                        borderColor: '#f25555',
+                        backgroundColor: 'rgba(242,85,85,0.12)',
+                        borderWidth: 2,
+                        fill: 'origin',
+                        pointRadius: 0,
+                        tension: 0.2
+                    }]
                 },
                 options: {
                     responsive: true,
                     scales: {
-                        y: { beginAtZero: true, suggestedMax: maxDrawdown * 1.2, reverse: true, ticks: { callback: v => (v*100).toFixed(0)+'%' } },
+                        y: {
+                            beginAtZero: false,
+                            max: 0,
+                            min: minDrawdown - padding,
+                            ticks: { callback: v => (v * 100).toFixed(0) + '%' }
+                        },
                         x: { ticks: { maxRotation: 30, minRotation: 30 } }
                     },
                     plugins: { legend: { display: false } }
@@ -348,4 +379,5 @@
 
     </script>
 </body>
+
 </html>

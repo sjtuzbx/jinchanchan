@@ -15,6 +15,7 @@ from backtest.data_manager import change_ts
 from logger import Logger
 import traceback
 import requests
+import numpy as np
 
 import tushare as ts
 try:
@@ -60,6 +61,20 @@ def no_cache(view):
 def date2int(date_str):
     """将日期字符串转换为整数格式"""
     return int(date_str.replace('-', ''))
+
+def convert_numpy_types(obj):
+    """递归地将 numpy 类型转换为原生 Python 类型，便于 JSON 序列化"""
+    if isinstance(obj, dict):
+        return {k: convert_numpy_types(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [convert_numpy_types(v) for v in obj]
+    if isinstance(obj, tuple):
+        return tuple(convert_numpy_types(v) for v in obj)
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    if isinstance(obj, np.generic):
+        return obj.item()
+    return obj
 
 @app.errorhandler(Exception)
 def handle_global_exception(e):
@@ -596,6 +611,7 @@ def run_backtest():
 
         print('name dict2 is ', bs._screener.strategy_name_dict)
         res = bs.backtesting()
+        res = convert_numpy_types(res)
         
         for k in ['sharpe_ratio', 'annual_return', 'max_drawdown']:
             res[k] = float(res[k])
@@ -607,9 +623,9 @@ def run_backtest():
         
         # 实际项目中这里会调用真实回测引擎
         # 这里生成模拟回测数据
-        result = generate_backtest_results(backtest_params)
+        # result = generate_backtest_results(backtest_params)
         
-        print(result)
+        print(res)
         return jsonify(res)
 
     # except Exception as e:
