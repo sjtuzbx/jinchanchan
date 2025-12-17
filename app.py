@@ -6,7 +6,8 @@ from pathlib import Path
 import datetime
 from datetime import timedelta
 import random
-import functools 
+import functools
+import os
 from flask import make_response, jsonify
 from data import get_exchange_filter
 from backtest.screener import Screener
@@ -40,6 +41,13 @@ pro = ts.pro_api(token)
 stock_name_cache = StockNameCache(pro, cache_file=Path(__file__).resolve().parent / "data" / "stock_names.json")
 stock_name_cache.ensure_cache()
 backtest_service = BacktestService('strategy_config.json.template', stock_name_cache)
+
+DEBUG_MODE = os.getenv("JC_DEBUG", "0") == "1"
+
+
+def debug_print(*args, **kwargs):
+    if DEBUG_MODE:
+        print(*args, **kwargs)
 
 FEAR_GREED_URL = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
 FEAR_GREED_HEADERS = {
@@ -409,13 +417,13 @@ def run_screener():
     import time
 
     c1 = time.time()
-    print('c1 = ', c1)
+    debug_print('c1 = ', c1)
     filter_date = request.form['filter_date']
     exclude_exchanges = request.form.getlist('exclude_exchanges')
     exclude_st = 'exclude_st' in request.form
     filter_pe_gt_zero = 'filter_pe_gt_zero' in request.form
     sort_by = request.form.get('sort_by', 'market_cap_asc')
-    print('exclude_exchanges ', exclude_exchanges)
+    debug_print('exclude_exchanges ', exclude_exchanges)
 
     screener.strategy_name_dict['trade_strategy']['end_time'] = date2int(TODAY)
     screener.strategy_name_dict['select_strategy']['st_strategy']['exclude'] = exclude_st
@@ -438,9 +446,9 @@ def run_screener():
         screener.strategy_name_dict['select_strategy']['xsz_strategy'] = {}
 
 
-    print(TODAY, 'today ', type(TODAY))
-    print(filter_date, type(filter_date))
-    print('strategy_name_dict', screener.strategy_name_dict)
+    debug_print(TODAY, 'today ', type(TODAY))
+    debug_print(filter_date, type(filter_date))
+    debug_print('strategy_name_dict', screener.strategy_name_dict)
     
     error_msg = None
     try:
@@ -454,7 +462,7 @@ def run_screener():
 
     res = []
     c2 = time.time()
-    print('c2 = ', c2 - c1)
+    debug_print('c2 = ', c2 - c1)
     if stocks:
         is_st_dg = screener.dm.is_st(screener.stock_list, date2int(filter_date))
         close_dg = screener.dm.close(screener.stock_list, date2int(filter_date), adj=False)
@@ -466,7 +474,7 @@ def run_screener():
 
 
     c3 = time.time()
-    print('c3 = ', c3 - c2)
+    debug_print('c3 = ', c3 - c2)
     avg_total_mv = []
     index = 1 
     for code, score in stocks[:30]:
@@ -494,14 +502,14 @@ def run_screener():
         index += 1
 
     if avg_total_mv:
-        print('avg is ', np.mean(avg_total_mv[:20]))
+        debug_print('avg is ', np.mean(avg_total_mv[:20]))
     # 准备交易所筛选数据
     exchange_data = get_exchange_filter()
     
-    print(res)
+    debug_print(res)
 
     c4 = time.time()
-    print('c4 = ', c4 - c3)
+    debug_print('c4 = ', c4 - c3)
     # 渲染结果页面
     return render_template('result.html', 
                            stocks=res,

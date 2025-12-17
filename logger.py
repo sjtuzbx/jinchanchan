@@ -14,6 +14,7 @@ import sys
 import shutil
 import logging
 import traceback
+from pathlib import Path
 from logging.handlers import TimedRotatingFileHandler
 
 # from backtest.utils.config import config
@@ -157,7 +158,7 @@ class Test_Logger:
         # backup_count = config.log.get("backup_count", 0)
         console = False
         level = "ERROR"
-        path = "./"
+        path = Path(__file__).resolve().parent / "log"
         name = "test.log"
         clear = False
         backup_count = 0
