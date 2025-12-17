@@ -470,6 +470,7 @@ def run_screener():
     net_assets = screener.dm.net_assets(screener.stock_list, date2int(filter_date))
     goodwill = np.nan_to_num(screener.dm.goodwill(screener.stock_list, date2int(filter_date)))
     profit_dedtQ = screener.dm.profit_dedtQ(screener.stock_list, date2int(filter_date))
+    ewm_amount = screener.dm.ewm_amount(screener.stock_list, date2int(filter_date))
 
 
 
@@ -489,7 +490,9 @@ def run_screener():
         'quarterly_net_profit': profit_dedtQ[idx] / 1e8, 
         'goodwill': goodwill[idx] / 1e8 , 
         'net_assets': net_assets[idx] / 1e8, 
-        'adjusted_pb': total_mv[idx] / (net_assets[idx] - goodwill[idx])})
+        'adjusted_pb': total_mv[idx] / (net_assets[idx] - goodwill[idx])
+        })
+        # 'ewm_amount': ewm_amount[idx] * 1e4})
 
         index += 1
 
