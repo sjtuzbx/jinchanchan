@@ -163,8 +163,11 @@
         let monthlyReturnChart = null;
         let positionHistoryData = [];
         let tradeHistoryData = [];
+        let tradeReturnsData = [];
         let positionPage = 1;
         let tradePage = 1;
+        let tradeReturnPage = 1;
+        let tradeReturnOrder = 'desc';
         const PAGE_SIZE = 10;
 
         function getFormDataAsObject(form) {
@@ -245,8 +248,10 @@
             const resultsContent = document.getElementById('results-content');
             positionHistoryData = [...(data.position_history || [])].reverse();
             tradeHistoryData = [...(data.trade_history || [])].reverse();
+            tradeReturnsData = [...(data.trade_returns || [])];
             positionPage = 1;
             tradePage = 1;
+            tradeReturnPage = 1;
             const num = v => Number(v).toFixed(2);
             resultsContent.innerHTML = `
                 <div class="row g-3 mb-3">
@@ -271,6 +276,8 @@
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <div>每日持仓</div>
                         <div class="d-flex align-items-center gap-2">
+                            <span class="badge bg-primary-subtle text-primary border">蓝色：上期调出</span>
+                            <span class="badge bg-danger-subtle text-danger border">红色：本期调入</span>
                             <button class="btn btn-sm btn-outline-secondary" onclick="changePositionPage(-1)">上一页</button>
                             <span class="muted small" id="position-pagination"></span>
                             <button class="btn btn-sm btn-outline-secondary" onclick="changePositionPage(1)">下一页</button>
@@ -317,6 +324,37 @@
                         <div class="muted small" id="trade-empty" style="display:none;">暂无交易发生</div>
                     </div>
                 </div>
+                <div class="card mt-3">
+                    <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+                        <div>交易收益排行</div>
+                        <div class="d-flex align-items-center gap-2">
+                            <select class="form-select form-select-sm" style="width:auto" onchange="setTradeReturnOrder(this.value)">
+                                <option value="desc" selected>收益率从高到低</option>
+                                <option value="asc">收益率从低到高</option>
+                            </select>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="changeTradeReturnPage(-1)">上一页</button>
+                            <span class="muted small" id="trade-return-pagination"></span>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="changeTradeReturnPage(1)">下一页</button>
+                        </div>
+                    </div>
+                    <div class="card-body table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th>代码</th>
+                                    <th>名称</th>
+                                    <th>买入日期</th>
+                                    <th>卖出日期</th>
+                                    <th>买入价</th>
+                                    <th>卖出价</th>
+                                    <th>收益率</th>
+                                </tr>
+                            </thead>
+                            <tbody id="trade-return-body"></tbody>
+                        </table>
+                        <div class="muted small" id="trade-return-empty" style="display:none;">暂无已完成交易</div>
+                    </div>
+                </div>
             `;
 
             console.log("data.chart_data", data.chart_data)
@@ -325,6 +363,7 @@
                 renderPerformanceChart(data.chart_data, data.drawdown_data);
                 renderPositionTable();
                 renderTradeTable();
+                renderTradeReturnTable();
             }, 50);
         }
 
@@ -450,6 +489,18 @@
             renderTradeTable();
         }
 
+        function changeTradeReturnPage(delta) {
+            const totalPages = Math.max(1, Math.ceil(tradeReturnsData.length / PAGE_SIZE));
+            tradeReturnPage = Math.min(Math.max(1, tradeReturnPage + delta), totalPages);
+            renderTradeReturnTable();
+        }
+
+        function setTradeReturnOrder(order) {
+            tradeReturnOrder = order;
+            tradeReturnPage = 1;
+            renderTradeReturnTable();
+        }
+
         function renderPositionTable() {
             const tbody = document.getElementById('position-table-body');
             const pagination = document.getElementById('position-pagination');
@@ -465,7 +516,12 @@
             const start = (positionPage - 1) * PAGE_SIZE;
             const rows = positionHistoryData.slice(start, start + PAGE_SIZE).map(item => {
                 const holdings = (item.positions || []).length
-                    ? item.positions.map(pos => `${pos.name || pos.code} (${pos.code}) × ${pos.shares}股 @ ${Number(pos.price ?? 0).toFixed(2)}`).join('<br>')
+                    ? item.positions.map(pos => {
+                        let cls = 'text-body';
+                        if (pos.action === 'added') cls = 'text-danger fw-bold';
+                        else if (pos.action === 'removed') cls = 'text-primary fw-bold';
+                        return `<span class="${cls}">${pos.name || pos.code} (${pos.code}) × ${pos.shares}股 @ ${Number(pos.price ?? 0).toFixed(2)}</span>`;
+                    }).join('<br>')
                     : '空仓';
                 return `
                     <tr>
@@ -500,6 +556,34 @@
                     <td>${item.quantity}</td>
                     <td>${Number(item.price ?? 0).toFixed(2)}</td>
                     <td>${formatMoney(item.amount ?? 0, 0)}</td>
+                </tr>
+            `).join('');
+            tbody.innerHTML = rows;
+        }
+
+        function renderTradeReturnTable() {
+            const tbody = document.getElementById('trade-return-body');
+            const pagination = document.getElementById('trade-return-pagination');
+            const emptyHint = document.getElementById('trade-return-empty');
+            const totalPages = Math.max(1, Math.ceil(tradeReturnsData.length / PAGE_SIZE));
+            pagination.textContent = tradeReturnsData.length ? `第 ${tradeReturnPage}/${totalPages} 页` : '暂无记录';
+            if (!tradeReturnsData.length) {
+                tbody.innerHTML = '';
+                emptyHint.style.display = 'block';
+                return;
+            }
+            emptyHint.style.display = 'none';
+            const sorted = [...tradeReturnsData].sort((a, b) => tradeReturnOrder === 'asc' ? (a.return - b.return) : (b.return - a.return));
+            const start = (tradeReturnPage - 1) * PAGE_SIZE;
+            const rows = sorted.slice(start, start + PAGE_SIZE).map(item => `
+                <tr>
+                    <td>${item.code}</td>
+                    <td>${item.name || item.code}</td>
+                    <td>${item.buy_date || '-'}</td>
+                    <td>${item.sell_date || '-'}</td>
+                    <td>${Number(item.buy_price ?? 0).toFixed(2)}</td>
+                    <td>${Number(item.sell_price ?? 0).toFixed(2)}</td>
+                    <td class="${item.return >= 0 ? 'text-success' : 'text-danger'}">${(item.return * 100).toFixed(2)}%</td>
                 </tr>
             `).join('');
             tbody.innerHTML = rows;

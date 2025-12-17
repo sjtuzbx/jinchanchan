@@ -92,4 +92,8 @@ class StockNameCache:
             code = trade.get('code')
             if code:
                 trade['name'] = self.get_name(code)
+        for trade in result.get('trade_returns', []):
+            code = trade.get('code')
+            if code:
+                trade['name'] = self.get_name(code)
         return result

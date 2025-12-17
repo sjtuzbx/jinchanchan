@@ -8,7 +8,8 @@ from datetime import timedelta
 import random
 import functools
 import os
-from flask import make_response, jsonify
+import time
+from flask import make_response, jsonify, Response
 from data import get_exchange_filter
 from backtest.screener import Screener
 from backtest.data_manager import change_ts
@@ -411,48 +412,24 @@ def cn_fear():
         error=error
     )
 
-@app.route('/screener', methods=['POST'])
-def run_screener():
-    # 获取用户设置的条件
-    import time
-
-    c1 = time.time()
-    debug_print('c1 = ', c1)
-    filter_date = request.form['filter_date']
-    exclude_exchanges = request.form.getlist('exclude_exchanges')
-    exclude_st = 'exclude_st' in request.form
-    filter_pe_gt_zero = 'filter_pe_gt_zero' in request.form
-    sort_by = request.form.get('sort_by', 'market_cap_asc')
-    debug_print('exclude_exchanges ', exclude_exchanges)
+def execute_screen_logic(filter_date, exclude_exchanges, exclude_st, filter_pe_gt_zero, sort_by):
+    start_time = time.time()
+    debug_print('screener start at ', start_time)
 
     screener.strategy_name_dict['trade_strategy']['end_time'] = date2int(TODAY)
     screener.strategy_name_dict['select_strategy']['st_strategy']['exclude'] = exclude_st
 
-    mapping = {
-                'main': 'zb_strategy',
-                'kcb': 'kcb_strategy',
-                'cyb': 'cyb_strategy',
-                'bse': 'bse_strategy'
-    }
-    for k in ['main', 'kcb', 'cyb', 'bse']:
-        if k in exclude_exchanges:
-            screener.strategy_name_dict['select_strategy'][mapping[k]]['exclude'] = True
-        else:
-            screener.strategy_name_dict['select_strategy'][mapping[k]]['exclude'] = False
+    mapping = {'main': 'zb_strategy', 'kcb': 'kcb_strategy', 'cyb': 'cyb_strategy', 'bse': 'bse_strategy'}
+    for k, strategy_name in mapping.items():
+        screener.strategy_name_dict['select_strategy'][strategy_name]['exclude'] = k in (exclude_exchanges or [])
 
     if not filter_pe_gt_zero:
         screener.strategy_name_dict['select_strategy'].pop('xsz_strategy', None)
     else:
-        screener.strategy_name_dict['select_strategy']['xsz_strategy'] = {}
+        screener.strategy_name_dict['select_strategy']['xsz_strategy'] = screener.strategy_name_dict['select_strategy'].get('xsz_strategy', {})
 
-
-    debug_print(TODAY, 'today ', type(TODAY))
-    debug_print(filter_date, type(filter_date))
-    debug_print('strategy_name_dict', screener.strategy_name_dict)
-    
     error_msg = None
     try:
-        # 应用筛选条件获取股票数据
         stocks = screener.select(date2int(filter_date)) or []
     except Exception as e:
         Logger.error(f"run_screener failed: {e}")
@@ -461,8 +438,6 @@ def run_screener():
         error_msg = str(e)
 
     res = []
-    c2 = time.time()
-    debug_print('c2 = ', c2 - c1)
     if stocks:
         is_st_dg = screener.dm.is_st(screener.stock_list, date2int(filter_date))
         close_dg = screener.dm.close(screener.stock_list, date2int(filter_date), adj=False)
@@ -472,46 +447,45 @@ def run_screener():
         profit_dedtQ = screener.dm.profit_dedtQ(screener.stock_list, date2int(filter_date))
         ewm_amount = screener.dm.ewm_amount(screener.stock_list, date2int(filter_date))
 
-
-    c3 = time.time()
-    debug_print('c3 = ', c3 - c2)
-    avg_total_mv = []
-    index = 1 
-    for code, score in stocks[:30]:
-        idx = np.where(screener.stock_list == code)[0][0]
-        # print(idx, is_st_dg.shape, is_st_dg[idx])
-        data = pro.stock_basic(ts_code=change_ts(str(code)), fields='ts_code,symbol,name,exchange')
-        # ewm_val = None
-        # if ewm_amount is not None:
-        #     try:
-        #         ewm_val = float(ewm_amount[-1, idx]) if hasattr(ewm_amount, "ndim") and ewm_amount.ndim >= 2 else float(ewm_amount[idx])
-        #     except Exception:
-        #         Logger.error(f"ewm_amount parse failed for {code}")
-        avg_total_mv.append(total_mv[idx])
-        res.append({'index': index, 'score': score, 'id': str(code), 'name': data.name.values[0], 'exchange_name': exchange_name_dict[data.exchange.values[0]], 
-        'is_st': bool(is_st_dg[idx]), 'closing_price': close_dg[idx], 
-        'market_cap': total_mv[idx] / 1e8, 
-        'quarterly_pe': total_mv[idx] / profit_dedtQ[idx] / 4, 
-        'quarterly_net_profit': profit_dedtQ[idx] / 1e8, 
-        'goodwill': goodwill[idx] / 1e8 , 
-        'net_assets': net_assets[idx] / 1e8, 
-        'adjusted_pb': total_mv[idx] / (net_assets[idx] - goodwill[idx]),
-        'ewm_amount': ewm_amount[-1, idx] / 10 
-        })
-
-        index += 1
-
-    if avg_total_mv:
-        debug_print('avg is ', np.mean(avg_total_mv[:20]))
-    # 准备交易所筛选数据
+        avg_total_mv = []
+        for index, (code, score) in enumerate(stocks, start=1):
+            idx = np.where(screener.stock_list == code)[0][0]
+            data = pro.stock_basic(ts_code=change_ts(str(code)), fields='ts_code,symbol,name,exchange')
+            avg_total_mv.append(total_mv[idx])
+            res.append({
+                'index': index,
+                'score': score,
+                'id': str(code),
+                'name': data.name.values[0],
+                'exchange_name': exchange_name_dict[data.exchange.values[0]],
+                'is_st': bool(is_st_dg[idx]),
+                'closing_price': close_dg[idx],
+                'market_cap': total_mv[idx] / 1e8,
+                'quarterly_pe': total_mv[idx] / profit_dedtQ[idx] / 4 if profit_dedtQ[idx] else None,
+                'quarterly_net_profit': profit_dedtQ[idx] / 1e8,
+                'goodwill': goodwill[idx] / 1e8,
+                'net_assets': net_assets[idx] / 1e8,
+                'adjusted_pb': total_mv[idx] / (net_assets[idx] - goodwill[idx]) if (net_assets[idx] - goodwill[idx]) else None,
+                'ewm_amount': ewm_amount[-1, idx] / 10 if ewm_amount is not None else None
+            })
     exchange_data = get_exchange_filter()
-    
-    debug_print(res)
+    debug_print('screener result len', len(res))
+    return res, error_msg, exchange_data
 
-    c4 = time.time()
-    debug_print('c4 = ', c4 - c3)
-    # 渲染结果页面
-    return render_template('result.html', 
+
+@app.route('/screener', methods=['POST'])
+def run_screener():
+    filter_date = request.form['filter_date']
+    exclude_exchanges = request.form.getlist('exclude_exchanges')
+    exclude_st = 'exclude_st' in request.form
+    filter_pe_gt_zero = 'filter_pe_gt_zero' in request.form
+    sort_by = request.form.get('sort_by', 'market_cap_asc')
+
+    res, error_msg, exchange_data = execute_screen_logic(
+        filter_date, exclude_exchanges, exclude_st, filter_pe_gt_zero, sort_by
+    )
+
+    return render_template('result.html',
                            stocks=res,
                            error=error_msg,
                            filter_date=filter_date,
@@ -520,6 +494,25 @@ def run_screener():
                            filter_pe_gt_zero=filter_pe_gt_zero,
                            sort_by=sort_by,
                            exchange_data=exchange_data)
+
+
+@app.route('/screener/export')
+def export_screener():
+    filter_date = request.args.get('filter_date', TODAY)
+    exclude_exchanges = request.args.getlist('exclude_exchanges')
+    exclude_st = 'exclude_st' in request.args
+    filter_pe_gt_zero = 'filter_pe_gt_zero' in request.args
+    sort_by = request.args.get('sort_by', 'market_cap_asc')
+
+    res, _, _ = execute_screen_logic(filter_date, exclude_exchanges, exclude_st, filter_pe_gt_zero, sort_by)
+    lines = ["代码,名字"] + [f"{item['id']},{item['name']}" for item in res]
+    csv_data = "\n".join(lines)
+    filename = f"screener_{filter_date}.csv"
+    return Response(
+        csv_data,
+        mimetype='text/csv',
+        headers={"Content-Disposition": f"attachment;filename={filename}"}
+    )
 
 
 @app.route('/backtest')
