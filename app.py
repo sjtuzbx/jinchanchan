@@ -31,6 +31,7 @@ exchange_name_dict = {
 
 token = TS_TOKEN or "1e266a5110f1d8fd926d3af0d034458b9d5c904636c72c723ab9fa38"
 pro = ts.pro_api(token)
+SEC_NAME_CACHE = {}
 
 FEAR_GREED_URL = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
 FEAR_GREED_HEADERS = {
@@ -75,6 +76,49 @@ def convert_numpy_types(obj):
     if isinstance(obj, np.generic):
         return obj.item()
     return obj
+
+def fetch_security_name(code):
+    if not code:
+        return code
+    if code in SEC_NAME_CACHE:
+        return SEC_NAME_CACHE[code]
+    ts_code = change_ts(code)
+    try:
+        df = pro.stock_basic(ts_code=ts_code, fields='ts_code,name')
+        if df is not None and not df.empty:
+            name = df.iloc[0]['name']
+            SEC_NAME_CACHE[code] = name
+            return name
+    except Exception as ex:
+        Logger.error(f"stock name fetch failed for {code}: {ex}")
+    SEC_NAME_CACHE[code] = code
+    return code
+
+def enrich_security_names(result):
+    if not isinstance(result, dict):
+        return result
+    codes = set()
+    for entry in result.get('position_history', []):
+        for pos in entry.get('positions', []):
+            code = pos.get('code')
+            if code:
+                codes.add(str(code))
+    for trade in result.get('trade_history', []):
+        code = trade.get('code')
+        if code:
+            codes.add(str(code))
+    for code in codes:
+        fetch_security_name(code)
+    for entry in result.get('position_history', []):
+        for pos in entry.get('positions', []):
+            code = pos.get('code')
+            if code:
+                pos['name'] = SEC_NAME_CACHE.get(code, code)
+    for trade in result.get('trade_history', []):
+        code = trade.get('code')
+        if code:
+            trade['name'] = SEC_NAME_CACHE.get(code, code)
+    return result
 
 @app.errorhandler(Exception)
 def handle_global_exception(e):
@@ -612,6 +656,7 @@ def run_backtest():
         print('name dict2 is ', bs._screener.strategy_name_dict)
         res = bs.backtesting()
         res = convert_numpy_types(res)
+        res = enrich_security_names(res)
         
         for k in ['sharpe_ratio', 'annual_return', 'max_drawdown']:
             res[k] = float(res[k])

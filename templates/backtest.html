@@ -160,8 +160,12 @@
             Chart.register(ChartZoom);
         }
         let performanceChart = null;
-        let drawdownChart = null;
         let monthlyReturnChart = null;
+        let positionHistoryData = [];
+        let tradeHistoryData = [];
+        let positionPage = 1;
+        let tradePage = 1;
+        const PAGE_SIZE = 10;
 
         function getFormDataAsObject(form) {
             const formData = new FormData(form);
@@ -200,7 +204,6 @@
             `;
 
             if (performanceChart) { performanceChart.destroy(); performanceChart = null; }
-            if (drawdownChart) { drawdownChart.destroy(); drawdownChart = null; }
             if (monthlyReturnChart) { monthlyReturnChart.destroy(); monthlyReturnChart = null; }
 
             fetch('/backtest', {
@@ -240,30 +243,10 @@
 
         function displayBacktestResults(data) {
             const resultsContent = document.getElementById('results-content');
-            const positions = data.position_history || [];
-            const trades = data.trade_history || [];
-            const positionRows = positions.map(item => {
-                const holdings = (item.positions || []).length
-                    ? item.positions.map(pos => `${pos.code} (${pos.shares}) @ ${Number(pos.price ?? 0).toFixed(2)}`).join('， ')
-                    : '空仓';
-                return `
-                    <tr>
-                        <td>${item.date}</td>
-                        <td>${formatMoney(item.cash, 0)}</td>
-                        <td>${holdings}</td>
-                    </tr>
-                `;
-            }).join('');
-            const tradeRows = trades.map(item => `
-                <tr>
-                    <td>${item.date}</td>
-                    <td>${item.direction === 'buy' ? '买入' : '卖出'}</td>
-                    <td>${item.code}</td>
-                    <td>${item.quantity}</td>
-                    <td>${Number(item.price ?? 0).toFixed(2)}</td>
-                    <td>${formatMoney(item.amount ?? 0, 0)}</td>
-                </tr>
-            `).join('');
+            positionHistoryData = data.position_history || [];
+            tradeHistoryData = data.trade_history || [];
+            positionPage = 1;
+            tradePage = 1;
             const num = v => Number(v).toFixed(2);
             resultsContent.innerHTML = `
                 <div class="row g-3 mb-3">
@@ -284,19 +267,16 @@
                         <canvas id="performance-chart" height="340"></canvas>
                     </div>
                 </div>
-                <div class="card">
-                    <div class="card-header">回撤曲线</div>
-                    <div class="card-body">
-                        <canvas id="drawdown-chart" height="260"></canvas>
-                    </div>
-                </div>
                 <div class="card mt-3">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <div>每日持仓</div>
-                        <span class="muted small">记录天数：${positions.length}</span>
+                        <div class="d-flex align-items-center gap-2">
+                            <button class="btn btn-sm btn-outline-secondary" onclick="changePositionPage(-1)">上一页</button>
+                            <span class="muted small" id="position-pagination"></span>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="changePositionPage(1)">下一页</button>
+                        </div>
                     </div>
                     <div class="card-body table-responsive">
-                        ${positions.length ? `
                         <table class="table table-sm align-middle">
                             <thead>
                                 <tr>
@@ -305,30 +285,36 @@
                                     <th>持仓明细</th>
                                 </tr>
                             </thead>
-                            <tbody>${positionRows}</tbody>
-                        </table>` : `<div class="muted">暂无持仓记录</div>`}
+                            <tbody id="position-table-body"></tbody>
+                        </table>
+                        <div class="muted small" id="position-empty" style="display:none;">暂无持仓记录</div>
                     </div>
                 </div>
                 <div class="card mt-3">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <div>交易记录</div>
-                        <span class="muted small">交易次数：${trades.length}</span>
+                        <div class="d-flex align-items-center gap-2">
+                            <button class="btn btn-sm btn-outline-secondary" onclick="changeTradePage(-1)">上一页</button>
+                            <span class="muted small" id="trade-pagination"></span>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="changeTradePage(1)">下一页</button>
+                        </div>
                     </div>
                     <div class="card-body table-responsive">
-                        ${trades.length ? `
                         <table class="table table-sm align-middle">
                             <thead>
                                 <tr>
                                     <th>日期</th>
                                     <th>方向</th>
                                     <th>代码</th>
+                                    <th>名称</th>
                                     <th>数量</th>
                                     <th>价格</th>
                                     <th>金额</th>
                                 </tr>
                             </thead>
-                            <tbody>${tradeRows}</tbody>
-                        </table>` : `<div class="muted">暂无交易发生</div>`}
+                            <tbody id="trade-table-body"></tbody>
+                        </table>
+                        <div class="muted small" id="trade-empty" style="display:none;">暂无交易发生</div>
                     </div>
                 </div>
             `;
@@ -337,7 +323,8 @@
             console.log("data.drawdown_data", data.drawdown_data)
             setTimeout(() => {
                 renderPerformanceChart(data.chart_data, data.drawdown_data);
-                renderDrawdownChart(data.drawdown_data);
+                renderPositionTable();
+                renderTradeTable();
             }, 50);
         }
 
@@ -451,45 +438,71 @@
             });
         }
 
-        function renderDrawdownChart(drawdownData) {
-            const ctx = document.getElementById('drawdown-chart').getContext('2d');
-            const values = (drawdownData.values || []).map(v => {
-                const parsed = Number(v);
-                return Number.isFinite(parsed) ? parsed : 0;
-            });
-            const minDrawdown = values.length ? Math.min(...values) : -0.01;
-            const padding = Math.abs(minDrawdown) * 0.15 || 0.01;
-            console.log("drawdownData.values  ", drawdownData.values)
-            console.log(values)
-            drawdownChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: drawdownData.labels,
-                    datasets: [{
-                        label: '回撤',
-                        data: values,
-                        borderColor: '#f25555',
-                        backgroundColor: 'rgba(242,85,85,0.12)',
-                        borderWidth: 2,
-                        fill: 'origin',
-                        pointRadius: 0,
-                        tension: 0.2
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    scales: {
-                        y: {
-                            beginAtZero: false,
-                            max: 0,
-                            min: minDrawdown - padding,
-                            ticks: { callback: v => (v * 100).toFixed(0) + '%' }
-                        },
-                        x: { ticks: { maxRotation: 30, minRotation: 30 } }
-                    },
-                    plugins: { legend: { display: false } }
-                }
-            });
+        function changePositionPage(delta) {
+            const totalPages = Math.max(1, Math.ceil(positionHistoryData.length / PAGE_SIZE));
+            positionPage = Math.min(Math.max(1, positionPage + delta), totalPages);
+            renderPositionTable();
+        }
+
+        function changeTradePage(delta) {
+            const totalPages = Math.max(1, Math.ceil(tradeHistoryData.length / PAGE_SIZE));
+            tradePage = Math.min(Math.max(1, tradePage + delta), totalPages);
+            renderTradeTable();
+        }
+
+        function renderPositionTable() {
+            const tbody = document.getElementById('position-table-body');
+            const pagination = document.getElementById('position-pagination');
+            const emptyHint = document.getElementById('position-empty');
+            const totalPages = Math.max(1, Math.ceil(positionHistoryData.length / PAGE_SIZE));
+            pagination.textContent = positionHistoryData.length ? `第 ${positionPage}/${totalPages} 页` : '暂无记录';
+            if (!positionHistoryData.length) {
+                tbody.innerHTML = '';
+                emptyHint.style.display = 'block';
+                return;
+            }
+            emptyHint.style.display = 'none';
+            const start = (positionPage - 1) * PAGE_SIZE;
+            const rows = positionHistoryData.slice(start, start + PAGE_SIZE).map(item => {
+                const holdings = (item.positions || []).length
+                    ? item.positions.map(pos => `${pos.name || pos.code} (${pos.code}) × ${pos.shares}股 @ ${Number(pos.price ?? 0).toFixed(2)}`).join('<br>')
+                    : '空仓';
+                return `
+                    <tr>
+                        <td>${item.date}</td>
+                        <td>${formatMoney(item.cash, 0)}</td>
+                        <td>${holdings}</td>
+                    </tr>
+                `;
+            }).join('');
+            tbody.innerHTML = rows;
+        }
+
+        function renderTradeTable() {
+            const tbody = document.getElementById('trade-table-body');
+            const pagination = document.getElementById('trade-pagination');
+            const emptyHint = document.getElementById('trade-empty');
+            const totalPages = Math.max(1, Math.ceil(tradeHistoryData.length / PAGE_SIZE));
+            pagination.textContent = tradeHistoryData.length ? `第 ${tradePage}/${totalPages} 页` : '暂无交易';
+            if (!tradeHistoryData.length) {
+                tbody.innerHTML = '';
+                emptyHint.style.display = 'block';
+                return;
+            }
+            emptyHint.style.display = 'none';
+            const start = (tradePage - 1) * PAGE_SIZE;
+            const rows = tradeHistoryData.slice(start, start + PAGE_SIZE).map(item => `
+                <tr>
+                    <td>${item.date}</td>
+                    <td class="${item.direction === 'buy' ? 'text-success' : 'text-danger'}">${item.direction === 'buy' ? '买入' : '卖出'}</td>
+                    <td>${item.code}</td>
+                    <td>${item.name || item.code}</td>
+                    <td>${item.quantity}</td>
+                    <td>${Number(item.price ?? 0).toFixed(2)}</td>
+                    <td>${formatMoney(item.amount ?? 0, 0)}</td>
+                </tr>
+            `).join('');
+            tbody.innerHTML = rows;
         }
 
     </script>
