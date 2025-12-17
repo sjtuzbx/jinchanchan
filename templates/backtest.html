@@ -233,8 +233,37 @@
             return (base * 100).toFixed(2) + '%';
         }
 
+        function formatMoney(value, decimals = 2) {
+            const num = Number(value ?? 0);
+            return num.toLocaleString('zh-CN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+        }
+
         function displayBacktestResults(data) {
             const resultsContent = document.getElementById('results-content');
+            const positions = data.position_history || [];
+            const trades = data.trade_history || [];
+            const positionRows = positions.map(item => {
+                const holdings = (item.positions || []).length
+                    ? item.positions.map(pos => `${pos.code} (${pos.shares}) @ ${Number(pos.price ?? 0).toFixed(2)}`).join('， ')
+                    : '空仓';
+                return `
+                    <tr>
+                        <td>${item.date}</td>
+                        <td>${formatMoney(item.cash, 0)}</td>
+                        <td>${holdings}</td>
+                    </tr>
+                `;
+            }).join('');
+            const tradeRows = trades.map(item => `
+                <tr>
+                    <td>${item.date}</td>
+                    <td>${item.direction === 'buy' ? '买入' : '卖出'}</td>
+                    <td>${item.code}</td>
+                    <td>${item.quantity}</td>
+                    <td>${Number(item.price ?? 0).toFixed(2)}</td>
+                    <td>${formatMoney(item.amount ?? 0, 0)}</td>
+                </tr>
+            `).join('');
             const num = v => Number(v).toFixed(2);
             resultsContent.innerHTML = `
                 <div class="row g-3 mb-3">
@@ -259,6 +288,47 @@
                     <div class="card-header">回撤曲线</div>
                     <div class="card-body">
                         <canvas id="drawdown-chart" height="260"></canvas>
+                    </div>
+                </div>
+                <div class="card mt-3">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <div>每日持仓</div>
+                        <span class="muted small">记录天数：${positions.length}</span>
+                    </div>
+                    <div class="card-body table-responsive">
+                        ${positions.length ? `
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th>日期</th>
+                                    <th>可用资金</th>
+                                    <th>持仓明细</th>
+                                </tr>
+                            </thead>
+                            <tbody>${positionRows}</tbody>
+                        </table>` : `<div class="muted">暂无持仓记录</div>`}
+                    </div>
+                </div>
+                <div class="card mt-3">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <div>交易记录</div>
+                        <span class="muted small">交易次数：${trades.length}</span>
+                    </div>
+                    <div class="card-body table-responsive">
+                        ${trades.length ? `
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th>日期</th>
+                                    <th>方向</th>
+                                    <th>代码</th>
+                                    <th>数量</th>
+                                    <th>价格</th>
+                                    <th>金额</th>
+                                </tr>
+                            </thead>
+                            <tbody>${tradeRows}</tbody>
+                        </table>` : `<div class="muted">暂无交易发生</div>`}
                     </div>
                 </div>
             `;
