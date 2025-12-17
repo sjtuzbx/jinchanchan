@@ -36,12 +36,24 @@
                 <div>
                     <div class="console-breadcrumb">股票筛选 / 结果</div>
                     <h2 class="fw-bold mb-0">筛选结果</h2>
-                    <div class="muted">共 {{ stocks|length }} 只符合条件</div>
+                    <div class="muted">显示前 20 条，共 {{ total_count }} 只符合条件</div>
                 </div>
                 <div class="d-flex gap-2">
                     <a href="{{ url_for('index') }}" class="btn btn-outline-primary"><i class="bi bi-arrow-left"></i>
                         重新筛选</a>
                     <a href="{{ url_for('backtest_page') }}" class="btn btn-primary">去回测</a>
+                    <form method="get" action="{{ url_for('export_screener') }}" class="d-inline">
+                        <input type="hidden" name="filter_date" value="{{ filter_date }}">
+                        {% for code in exclude_exchanges %}
+                        <input type="hidden" name="exclude_exchanges" value="{{ code }}">
+                        {% endfor %}
+                        {% if exclude_st %}<input type="hidden" name="exclude_st" value="true">{% endif %}
+                        {% if filter_pe_gt_zero %}<input type="hidden" name="filter_pe_gt_zero" value="true">{% endif %}
+                        <input type="hidden" name="sort_by" value="{{ sort_by }}">
+                        <button type="submit" class="btn btn-outline-secondary">
+                            <i class="bi bi-download"></i> 导出 CSV
+                        </button>
+                    </form>
                 </div>
             </div>
 

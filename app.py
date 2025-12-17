@@ -486,7 +486,8 @@ def run_screener():
     )
 
     return render_template('result.html',
-                           stocks=res,
+                           stocks=res[:20],
+                           has_more=len(res) > 20,
                            error=error_msg,
                            filter_date=filter_date,
                            exclude_exchanges=exclude_exchanges,
