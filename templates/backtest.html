@@ -48,12 +48,11 @@
                                 <label class="form-label fw-bold">排除交易所</label>
                                 <div class="border rounded p-3 mb-3">
                                     <div class="row g-2">
-                                        {% for code,label in [('main','主板'),('kcb','科创板'),('cyb','创业板'),('bse','北交所')]
-                                        %}
+                                        {% for code,label,checked in [('main','主板', False),('kcb','科创板', True),('cyb','创业板', True),('bse','北交所', True)] %}
                                         <div class="col-6">
                                             <div class="form-check">
                                                 <input class="form-check-input" type="checkbox" value="{{ code }}"
-                                                    name="exclude_exchanges[]" id="exclude-{{ code }}">
+                                                    name="exclude_exchanges[]" id="exclude-{{ code }}" {% if checked %}checked{% endif %}>
                                                 <label class="form-check-label" for="exclude-{{ code }}">{{ label
                                                     }}</label>
                                             </div>
@@ -65,7 +64,7 @@
                                 <div class="border rounded p-3">
                                     <div class="form-check mb-2">
                                         <input class="form-check-input" type="checkbox" value="true" name="exclude_st"
-                                            id="exclude-st">
+                                            id="exclude-st" checked>
                                         <label class="form-check-label" for="exclude-st">排除ST/*ST股票</label>
                                     </div>
                                     <div class="form-check">
@@ -267,7 +266,7 @@
             console.log("data.chart_data", data.chart_data)
             console.log("data.drawdown_data", data.drawdown_data)
             setTimeout(() => {
-                renderPerformanceChart(data.chart_data);
+                renderPerformanceChart(data.chart_data, data.drawdown_data);
                 renderDrawdownChart(data.drawdown_data);
             }, 50);
         }
@@ -276,6 +275,17 @@
             if (performanceChart && performanceChart.resetZoom) {
                 performanceChart.resetZoom();
             }
+        }
+
+        function alignDrawdownSeries(chartData, drawdownData) {
+            if (!drawdownData || !drawdownData.labels) {
+                return chartData.labels.map(() => null);
+            }
+            const indexMap = {};
+            drawdownData.labels.forEach((label, idx) => {
+                indexMap[label] = drawdownData.values[idx];
+            });
+            return chartData.labels.map(label => indexMap[label] ?? null);
         }
 
         function getPerformanceScaleBounds(chartData) {
@@ -295,16 +305,43 @@
             };
         }
 
-        function renderPerformanceChart(chartData) {
+        function getDrawdownBounds(drawdownSeries) {
+            const values = (drawdownSeries || []).filter(v => typeof v === 'number' && !Number.isNaN(v));
+            if (!values.length) {
+                return { min: -0.01 };
+            }
+            const min = Math.min(...values, 0);
+            return { min: min - Math.abs(min) * 0.1 || -0.01 };
+        }
+
+        function renderPerformanceChart(chartData, drawdownData) {
             const ctx = document.getElementById('performance-chart').getContext('2d');
+            const drawdownSeries = alignDrawdownSeries(chartData, drawdownData);
             const yBounds = getPerformanceScaleBounds(chartData);
+            const drawdownBounds = getDrawdownBounds(drawdownSeries);
             performanceChart = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: chartData.labels,
                     datasets: [
                         { label: '策略组合', data: chartData.strategy, borderColor: '#0f9cf5', backgroundColor: 'rgba(15,156,245,0.12)', borderWidth: 2, fill: true, pointRadius: 0 },
-                        { label: '基准指数', data: chartData.benchmark, borderColor: '#fd7e14', backgroundColor: 'rgba(253,126,20,0.08)', borderWidth: 2, borderDash: [5, 5], fill: false, pointRadius: 0 }
+                        { label: '基准指数', data: chartData.benchmark, borderColor: '#fd7e14', backgroundColor: 'rgba(253,126,20,0.08)', borderWidth: 2, borderDash: [5, 5], fill: false, pointRadius: 0 },
+                        {
+                            label: '回撤',
+                            data: drawdownSeries,
+                            borderColor: 'rgba(242,85,85,0.8)',
+                            backgroundColor: 'rgba(242,85,85,0.18)',
+                            borderWidth: 1.5,
+                            fill: {
+                                target: 'origin',
+                                below: 'rgba(242,85,85,0.18)',
+                                above: 'rgba(242,85,85,0.05)'
+                            },
+                            pointRadius: 0,
+                            yAxisID: 'yDrawdown',
+                            type: 'line',
+                            tension: 0.2
+                        }
                     ]
                 },
                 options: {
@@ -317,6 +354,14 @@
                             min: yBounds.min,
                             max: yBounds.max,
                             ticks: { callback: v => v.toFixed(2) }
+                        },
+                        yDrawdown: {
+                            position: 'right',
+                            suggestedMax: 0,
+                            max: 0,
+                            min: drawdownBounds.min,
+                            grid: { drawOnChartArea: false },
+                            ticks: { callback: v => (v * 100).toFixed(0) + '%', color: '#f25555' }
                         },
                         x: { ticks: { maxRotation: 30, minRotation: 30 } }
                     },
