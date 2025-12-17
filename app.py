@@ -10,12 +10,18 @@ import functools
 from flask import make_response, jsonify
 from data import get_exchange_filter
 from backtest.screener import Screener
-from backtest.backtester import Backtester
 from backtest.data_manager import change_ts
 from logger import Logger
 import traceback
 import requests
-import numpy as np
+from services.utils import (
+    date2int,
+    format_beijing_timestamp,
+    beijing_now,
+    convert_numpy_types,
+)
+from services.name_cache import StockNameCache
+from services.backtest_service import BacktestService
 
 import tushare as ts
 try:
@@ -31,7 +37,9 @@ exchange_name_dict = {
 
 token = TS_TOKEN or "1e266a5110f1d8fd926d3af0d034458b9d5c904636c72c723ab9fa38"
 pro = ts.pro_api(token)
-SEC_NAME_CACHE = {}
+stock_name_cache = StockNameCache(pro, cache_file=Path(__file__).resolve().parent / "data" / "stock_names.json")
+stock_name_cache.ensure_cache()
+backtest_service = BacktestService('strategy_config.json.template', stock_name_cache)
 
 FEAR_GREED_URL = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
 FEAR_GREED_HEADERS = {
@@ -39,7 +47,6 @@ FEAR_GREED_HEADERS = {
     "Accept": "application/json, text/plain, */*",
     "Referer": "https://www.cnn.com/markets/fear-and-greed"
 }
-BEIJING_TZ = datetime.timezone(datetime.timedelta(hours=8), name="CST")
 CN_HISTORY_CSV = Path(__file__).resolve().parent / "data" / "cn_sentiment_history.csv"
 
 app = Flask(__name__)
@@ -59,67 +66,6 @@ def no_cache(view):
         return response
     return decorated_view
 
-def date2int(date_str):
-    """将日期字符串转换为整数格式"""
-    return int(date_str.replace('-', ''))
-
-def convert_numpy_types(obj):
-    """递归地将 numpy 类型转换为原生 Python 类型，便于 JSON 序列化"""
-    if isinstance(obj, dict):
-        return {k: convert_numpy_types(v) for k, v in obj.items()}
-    if isinstance(obj, list):
-        return [convert_numpy_types(v) for v in obj]
-    if isinstance(obj, tuple):
-        return tuple(convert_numpy_types(v) for v in obj)
-    if isinstance(obj, np.ndarray):
-        return obj.tolist()
-    if isinstance(obj, np.generic):
-        return obj.item()
-    return obj
-
-def fetch_security_name(code):
-    if not code:
-        return code
-    if code in SEC_NAME_CACHE:
-        return SEC_NAME_CACHE[code]
-    ts_code = change_ts(code)
-    try:
-        df = pro.stock_basic(ts_code=ts_code, fields='ts_code,name')
-        if df is not None and not df.empty:
-            name = df.iloc[0]['name']
-            SEC_NAME_CACHE[code] = name
-            return name
-    except Exception as ex:
-        Logger.error(f"stock name fetch failed for {code}: {ex}")
-    SEC_NAME_CACHE[code] = code
-    return code
-
-def enrich_security_names(result):
-    if not isinstance(result, dict):
-        return result
-    codes = set()
-    for entry in result.get('position_history', []):
-        for pos in entry.get('positions', []):
-            code = pos.get('code')
-            if code:
-                codes.add(str(code))
-    for trade in result.get('trade_history', []):
-        code = trade.get('code')
-        if code:
-            codes.add(str(code))
-    for code in codes:
-        fetch_security_name(code)
-    for entry in result.get('position_history', []):
-        for pos in entry.get('positions', []):
-            code = pos.get('code')
-            if code:
-                pos['name'] = SEC_NAME_CACHE.get(code, code)
-    for trade in result.get('trade_history', []):
-        code = trade.get('code')
-        if code:
-            trade['name'] = SEC_NAME_CACHE.get(code, code)
-    return result
-
 @app.errorhandler(Exception)
 def handle_global_exception(e):
     """记录错误和堆栈"""
@@ -129,31 +75,6 @@ def handle_global_exception(e):
     if request.accept_mimetypes.accept_json and not request.accept_mimetypes.accept_html:
         return jsonify({"error": "internal server error", "message": str(e)}), 500
     return make_response(f"Internal Server Error: {e}", 500)
-
-def format_beijing_timestamp(ts):
-    """将时间戳/ISO字符串转为北京时间字符串"""
-    if not ts:
-        return None
-    try:
-        if isinstance(ts, (int, float)):
-            # CNN部分字段是毫秒时间戳
-            if ts > 1e12:
-                ts = ts / 1000.0
-            dt_obj = datetime.datetime.fromtimestamp(ts, tz=datetime.timezone.utc)
-        elif isinstance(ts, str):
-            if ts.isdigit() and len(ts) == 8:
-                dt_obj = datetime.datetime.strptime(ts, "%Y%m%d").replace(tzinfo=datetime.timezone.utc)
-            else:
-                dt_obj = datetime.datetime.fromisoformat(ts.replace("Z", "+00:00"))
-        else:
-            return None
-        return dt_obj.astimezone(BEIJING_TZ).strftime("%Y-%m-%d %H:%M:%S CST")
-    except Exception as ex:
-        Logger.error(f"timestamp format failed: {ex}")
-        return None
-
-def beijing_now():
-    return datetime.datetime.now(datetime.timezone.utc).astimezone(BEIJING_TZ)
 
 def fetch_fear_greed():
     """拉取CNN恐惧与贪婪指数数据"""
@@ -606,79 +527,17 @@ def backtest_page():
                            min_history_date=min_history_date[:10])
 
 @app.route('/backtest', methods=['POST'])
-# @no_cache
 def run_backtest():
-    # 获取筛选条件和回测参数
-    # try:
-        bs = Backtester('strategy_config.json.template')
-
-        data = request.get_json()
-        filter_conditions = data.get('filter', {})
-        backtest_params = data.get('params', {})
-        
-        print('data is ', data)
-        print('backtest params ', backtest_params)
-        print('name dict is ', bs._screener.strategy_name_dict)
-
-        exclude_exchanges = filter_conditions.get('exclude_exchanges', [])
-        exclude_st = 'exclude_st' in filter_conditions
-        filter_pe_gt_zero = 'filter_pe_gt_zero' in filter_conditions
-
-        mapping = {
-                'main': 'zb_strategy',
-                'kcb': 'kcb_strategy',
-                'cyb': 'cyb_strategy',
-                'bse': 'bse_strategy'
-            }
-        for k in ['main', 'kcb', 'cyb', 'bse']:
-            if k in exclude_exchanges:
-                bs._screener.strategy_name_dict['select_strategy'][mapping[k]]['exclude'] = True
-            else:
-                bs._screener.strategy_name_dict['select_strategy'][mapping[k]]['exclude'] = False
-
-        bs._screener.strategy_name_dict['select_strategy']['st_strategy']['exclude'] = exclude_st
-
-        if not filter_pe_gt_zero:
-            del  bs._screener.strategy_name_dict['select_strategy']['xsz_strategy']
-        else:
-            bs._screener.strategy_name_dict['select_strategy']['xsz_strategy'] = {}
-        
-        start_date = date2int(backtest_params['start_date'])
-        end_date = date2int(backtest_params['end_date'])
-        hold_num = int(backtest_params['hold_stocks'])
-        rebalance_period = int(backtest_params['rebalance_period'])
-
-        bs._screener.strategy_name_dict['trade_strategy']['start_time'] = str(start_date)
-        bs._screener.strategy_name_dict['trade_strategy']['end_time'] = str(end_date)
-        bs._screener.strategy_name_dict['trade_strategy']['holding_period'] = rebalance_period
-        bs._screener.strategy_name_dict['trade_strategy']['max_stock_num'] = hold_num
-
-        print('name dict2 is ', bs._screener.strategy_name_dict)
-        res = bs.backtesting()
-        res = convert_numpy_types(res)
-        res = enrich_security_names(res)
-        
-        for k in ['sharpe_ratio', 'annual_return', 'max_drawdown']:
-            res[k] = float(res[k])
-        print('my res is ', res)
-
-        
-
-        # if filter_conditions['filt']
-        
-        # 实际项目中这里会调用真实回测引擎
-        # 这里生成模拟回测数据
-        # result = generate_backtest_results(backtest_params)
-        
-        print(res)
-        return jsonify(res)
-
-    # except Exception as e:
-    #     print('error is ', e)
-    #     return jsonify({
-    #         "error": str(e),
-    #         "message": "回测过程中发生错误"
-    #     }), 500
+    data = request.get_json() or {}
+    filter_conditions = data.get('filter', {})
+    backtest_params = data.get('params', {})
+    try:
+        result = backtest_service.run(filter_conditions, backtest_params)
+        return jsonify(result)
+    except Exception as ex:
+        Logger.error(f"backtest failed: {ex}")
+        Logger.error(traceback.format_exc())
+        return jsonify({"error": "回测失败", "message": str(ex)}), 500
 
 
 def generate_backtest_results(params):
