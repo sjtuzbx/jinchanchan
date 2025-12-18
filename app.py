@@ -30,6 +30,7 @@ from services.monitor_service import FuturesMonitorService
 from services.basis_history import BasisHistory
 from services.vix_history import VixHistoryStore
 from services.afterhours_service import AfterHoursService
+from services.macro_service import MacroDataService
 
 import tushare as ts
 try:
@@ -54,6 +55,7 @@ basis_history.ensure_latest()
 monitor_service = FuturesMonitorService(basis_history=basis_history, pro_client=pro)
 vix_history_store = VixHistoryStore(Path(__file__).resolve().parent / "data" / "vix_history.json")
 after_hours_service = AfterHoursService(pro, Path(__file__).resolve().parent / "data" / "after_hours_history.json")
+macro_service = MacroDataService()
 
 DEBUG_MODE = os.getenv("JC_DEBUG", "0") == "1"
 
@@ -432,6 +434,7 @@ def monitor_data():
         trade_date = resolve_trade_date_for_cutoff(15)
         vix_history_store.record(trade_date, payload.get("vix", []))
         payload["vix_history"] = vix_history_store.get_history()
+        payload["macro"] = macro_service.get_macro_snapshot()
         return jsonify(convert_numpy_types(payload))
     except Exception as exc:
         Logger.error(f"fetch monitor data failed: {exc}")

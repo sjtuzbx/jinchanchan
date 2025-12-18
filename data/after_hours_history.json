@@ -1,5 +1,977 @@
 [
   {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240715"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240716"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240717"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240718"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240719"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240722"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240723"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240724"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240725"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240726"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240729"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240730"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240731"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240801"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240802"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240805"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240806"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240807"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240808"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240809"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240812"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240813"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240814"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240815"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240816"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240819"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240820"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240821"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240822"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240823"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240826"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240827"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240828"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240829"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240830"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240902"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240903"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240904"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240905"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240906"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240909"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240910"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240911"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240912"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240913"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240918"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240919"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240920"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240923"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240924"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240925"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240926"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240927"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20240930"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241008"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241009"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241010"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241011"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241014"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241015"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241016"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241017"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241018"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241021"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241022"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241023"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241024"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241025"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241028"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241029"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241030"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241031"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241101"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241104"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241105"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241106"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241107"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241108"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241111"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241112"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241113"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241114"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241115"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241118"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241119"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241120"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241121"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241122"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241125"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241126"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241127"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241128"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241129"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241202"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241203"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241204"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241205"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241206"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241209"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241210"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241211"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241212"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241213"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241216"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241217"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241218"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241219"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20241220"
+  },
+  {
     "trade_date": "20241223",
     "total_market_value": 99045394321132.0,
     "turnover_amount": 1547020092572.0,
@@ -398,6 +1370,24 @@
     "turnover_ratio": 0.014990086469839275,
     "margin_buy_amount": 146911158031.0,
     "margin_ratio": 0.09666380955615017
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "derived": true,
+    "trade_date": "20250312"
+  },
+  {
+    "total_market_value": 119499597835884.02,
+    "turnover_amount": 1834364912288.0,
+    "turnover_ratio": 0.015350385654077628,
+    "margin_buy_amount": 184368020435.0,
+    "margin_ratio": 0.10050782109925888,
+    "trade_date": "20250313",
+    "derived": true
   },
   {
     "trade_date": "20250314",
@@ -1200,11 +2190,27 @@
     "margin_ratio": 0.10096984073348991
   },
   {
+    "trade_date": "20250808",
+    "total_market_value": 109163918369280.0,
+    "turnover_amount": 1736302971196.0,
+    "turnover_ratio": 0.01590546580897206,
+    "margin_buy_amount": 166846100017.0,
+    "margin_ratio": 0.09609273426634356
+  },
+  {
     "trade_date": "20251217",
     "total_market_value": 119499597835884.02,
     "turnover_amount": 1834364912288.0,
     "turnover_ratio": 0.015350385654077628,
     "margin_buy_amount": 184368020435.0,
     "margin_ratio": 0.10050782109925888
+  },
+  {
+    "trade_date": "20251218",
+    "total_market_value": 119630149300686.98,
+    "turnover_amount": 1676800696865.0,
+    "turnover_ratio": 0.014016539364591187,
+    "margin_buy_amount": 0.0,
+    "margin_ratio": 0.0
   }
 ]

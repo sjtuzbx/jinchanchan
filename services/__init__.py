@@ -9,4 +9,5 @@ __all__ = [
     "basis_history",
     "afterhours_service",
     "vix_history",
+    "macro_service",
 ]

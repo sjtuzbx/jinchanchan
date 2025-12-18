@@ -67,6 +67,19 @@
                 </div>
             </div>
 
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center flex-column flex-lg-row">
+                    <div>
+                        <div class="text-uppercase small text-muted">宏观指标</div>
+                        <h5 class="mb-0">跨市场追踪（FRED & 国内行情）</h5>
+                    </div>
+                    <span class="small text-muted">部分国内数据需授权，暂以占位符显示</span>
+                </div>
+                <div class="card-body">
+                    <div id="macro-container" class="row g-3"></div>
+                </div>
+            </div>
+
             <div id="monitor-container" class="row gy-4">
                 <div class="col-12">
                     <div class="text-center py-5 text-muted">
@@ -293,6 +306,39 @@
             });
         }
 
+        function renderMacro(items) {
+            const container = document.getElementById('macro-container');
+            if (!container) return;
+            if (!items || !items.length) {
+                container.innerHTML = '<div class="col-12 text-muted text-center">暂无宏观数据</div>';
+                return;
+            }
+            container.innerHTML = items.map(item => {
+                if (item.error) {
+                    return `
+                        <div class="col-12 col-md-6 col-lg-4">
+                            <div class="border rounded p-3 h-100 d-flex flex-column">
+                                <div class="small text-muted">${item.name}</div>
+                                <div class="flex-grow-1 d-flex align-items-center text-danger">${item.error}</div>
+                                <div class="small text-muted">数据源：${item.source || '未接入'}</div>
+                            </div>
+                        </div>`;
+                }
+                const value = item.unit === "%"
+                    ? `${Number(item.value).toFixed(2)}%`
+                    : `${formatNumber(item.value, 2)}${item.unit || ''}`;
+                const pct = item.change_pct != null ? ` (${Number(item.change_pct).toFixed(2)}%)` : '';
+                return `
+                    <div class="col-12 col-md-6 col-lg-4">
+                        <div class="border rounded p-3 h-100 d-flex flex-column">
+                            <div class="small text-muted">${item.name}</div>
+                            <div class="display-6 fw-bold">${value}${pct}</div>
+                            <div class="small text-muted mt-auto">来源：${item.source || 'FRED'} · 更新时间：${item.updated_at || '--'}</div>
+                        </div>
+                    </div>`;
+            }).join('');
+        }
+
         async function fetchMonitorData() {
             try {
                 const res = await fetch(API_URL, { cache: 'no-store' });
@@ -304,6 +350,7 @@
                 renderItems(data);
                 renderVix(data.vix || []);
                 renderVixHistory(data.vix_history || {});
+                renderMacro(data.macro || []);
                 document.getElementById('last-update').textContent = new Date(data.generated_at).toLocaleString('zh-CN', { hour12: false });
             } catch (err) {
                 console.error(err);

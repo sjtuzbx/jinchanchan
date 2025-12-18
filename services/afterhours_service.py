@@ -112,10 +112,19 @@ class AfterHoursService:
         start_range = missing[0]
         end_range = missing[-1]
         mv_map, turnover_map, margin_map = self._bulk_collect(start_range, end_range)
+        history_sorted = sorted(history, key=lambda r: r.get("trade_date"))
+        last_known = history_sorted[-1] if history_sorted else None
         for date in missing:
             record = self._build_record_from_maps(date, mv_map, turnover_map, margin_map)
+            if record is None and last_known:
+                record = {
+                    **{k: v for k, v in last_known.items() if k != "trade_date"},
+                    "trade_date": date,
+                    "derived": True,
+                }
             if record:
                 self.store.upsert(record)
+                last_known = record
 
     def _compute_record(self, trade_date: str) -> Optional[Dict]:
         try:
@@ -189,7 +198,10 @@ class AfterHoursService:
 
     def _determine_target_trade_date(self) -> Optional[str]:
         now = beijing_now()
-        base_date = now.date() if now.hour >= 17 else now.date() - datetime.timedelta(days=1)
+        # 09:00 前仍展示前一交易日之前的数据，09:00 后切换到最新的上一交易日
+        base_date = now.date() - datetime.timedelta(days=1)
+        if now.hour < 9:
+            base_date -= datetime.timedelta(days=1)
         for offset in range(10):
             candidate = base_date - datetime.timedelta(days=offset)
             date_str = candidate.strftime("%Y%m%d")

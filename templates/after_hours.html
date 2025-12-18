@@ -32,7 +32,7 @@
                 <div>
                     <div class="console-breadcrumb">盘后监控</div>
                     <h2 class="fw-bold mb-1">市值换手 & 融资热度</h2>
-                    <div class="muted small">使用沪深京三市数据，17:00 前展示上一交易日，17:00 后展示当日数据</div>
+                    <div class="muted small">使用沪深京三市数据，指标会在次日 09:00 前更新上一交易日表现</div>
                 </div>
                 <div class="text-end small">
                     <div>目标交易日：<span id="target-date">--</span></div>
@@ -94,7 +94,11 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@1.2.1/dist/chartjs-plugin-zoom.min.js"></script>
     <script>
+        if (window.Chart && window.ChartZoom) {
+            Chart.register(ChartZoom);
+        }
         const API_URL = "{{ url_for('after_hours_data') }}";
         let turnoverChart = null;
         let marginChart = null;
@@ -160,6 +164,19 @@
                             callbacks: {
                                 label: ctx => `${ctx.dataset.label}: ${(ctx.parsed.y * 100).toFixed(2)}%`
                             }
+                        }
+                    }
+                },
+                plugins: {
+                    zoom: {
+                        pan: {
+                            enabled: true,
+                            mode: 'x'
+                        },
+                        zoom: {
+                            wheel: { enabled: true },
+                            pinch: { enabled: true },
+                            mode: 'x'
                         }
                     }
                 }
