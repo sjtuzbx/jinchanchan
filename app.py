@@ -26,6 +26,7 @@ from services.utils import (
 from services.name_cache import StockNameCache
 from services.backtest_service import BacktestService
 from services.strategy_store import StrategyStore
+from services.monitor_service import FuturesMonitorService
 
 import tushare as ts
 try:
@@ -45,6 +46,7 @@ stock_name_cache = StockNameCache(pro, cache_file=Path(__file__).resolve().paren
 stock_name_cache.ensure_cache()
 backtest_service = BacktestService('strategy_config.json.template', stock_name_cache)
 strategy_store = StrategyStore(Path(__file__).resolve().parent / "data" / "saved_strategies.json")
+monitor_service = FuturesMonitorService()
 
 DEBUG_MODE = os.getenv("JC_DEBUG", "0") == "1"
 
@@ -382,6 +384,19 @@ def fear_greed():
         extras=extras,
         error=error
     )
+
+@app.route('/monitor')
+def monitor_page():
+    return render_template('monitor.html')
+
+@app.route('/monitor/data')
+def monitor_data():
+    try:
+        payload = monitor_service.get_monitor_payload()
+        return jsonify(payload)
+    except Exception as exc:
+        Logger.error(f"fetch monitor data failed: {exc}")
+        return jsonify({"error": "获取监控数据失败"}), 500
 
 @app.route('/cn-fear')
 def cn_fear():

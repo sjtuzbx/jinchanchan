@@ -16,8 +16,10 @@
                 <nav class="console-nav">
                     <a href="{{ url_for('index') }}">筛选</a>
                     <a href="{{ url_for('backtest_page') }}">回测</a>
+                    <a href="{{ url_for('portfolio_page') }}">组合回测</a>
                     <a href="{{ url_for('fear_greed') }}" class="active">美股情绪</a>
                     <a href="{{ url_for('cn_fear') }}">A股情绪</a>
+                    <a href="{{ url_for('monitor_page') }}">实时监控</a>
                 </nav>
             </div>
         </div>
@@ -33,6 +35,7 @@
                     <div class="d-flex gap-2">
                         <a href="{{ url_for('index') }}" class="btn btn-light">股票筛选</a>
                         <a href="{{ url_for('backtest_page') }}" class="btn btn-outline-light">策略回测</a>
+                        <a href="{{ url_for('monitor_page') }}" class="btn btn-outline-light">实时监控</a>
                     </div>
                 </div>
 
