@@ -22,6 +22,7 @@
                     <a href="{{ url_for('fear_greed') }}">美股情绪</a>
                     <a href="{{ url_for('cn_fear') }}">A股情绪</a>
                     <a href="{{ url_for('monitor_page') }}">实时监控</a>
+                    <a href="{{ url_for('after_hours_page') }}">盘后监控</a>
                 </nav>
             </div>
         </div>
@@ -122,12 +123,12 @@
                                         <div class="d-flex align-items-center gap-3">
                                             <div class="form-check">
                                                 <input class="form-check-input" type="radio" name="rebalance-time"
-                                                    id="open-price" value="open" checked>
+                                                    id="open-price" value="open">
                                                 <label class="form-check-label" for="open-price">开盘价</label>
                                             </div>
                                             <div class="form-check">
                                                 <input class="form-check-input" type="radio" name="rebalance-time"
-                                                    id="close-price" value="close">
+                                                    id="close-price" value="close" checked>
                                                 <label class="form-check-label" for="close-price">收盘价</label>
                                             </div>
                                         </div>

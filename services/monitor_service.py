@@ -1,15 +1,15 @@
 import datetime
+import math
 import re
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
 import requests
+import time
 
-
-SINA_HEADERS = {
-    "Referer": "https://finance.sina.com.cn",
-    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
-}
+from logger import Logger
+from .constants import SINA_HEADERS
+from .option_vix_service import OptionVixService
 
 
 @dataclass
@@ -34,16 +34,19 @@ class FuturesMonitorService:
     """Fetch real-time futures/spot quotes and compute basis metrics."""
 
     SYMBOL_META = {
-        "IF": {"name": "沪深300期货", "index": "sh000300"},
-        "IH": {"name": "上证50期货", "index": "sh000016"},
-        "IC": {"name": "中证500期货", "index": "sh000905"},
-        "IM": {"name": "中证1000期货", "index": "sh000852"},
+        "IF": {"name": "沪深300期货", "index": "sh000300", "ts_index": "000300.SH"},
+        "IH": {"name": "上证50期货", "index": "sh000016", "ts_index": "000016.SH"},
+        "IC": {"name": "中证500期货", "index": "sh000905", "ts_index": "000905.SH"},
+        "IM": {"name": "中证1000期货", "index": "sh000852", "ts_index": "000852.SH"},
     }
 
-    def __init__(self, basis_history=None):
+    def __init__(self, basis_history=None, pro_client=None):
         self.session = requests.Session()
         self.session.headers.update(SINA_HEADERS)
         self.basis_history = basis_history
+        self.pro = pro_client
+        self._vix_cache = {"timestamp": 0, "data": []}
+        self.vix_service = OptionVixService(pro_client=pro_client, session=self.session)
 
     def get_monitor_payload(self) -> Dict:
         today = datetime.date.today()
@@ -97,6 +100,7 @@ class FuturesMonitorService:
         return {
             "generated_at": datetime.datetime.now().isoformat(),
             "items": items,
+            "vix": self._get_vix_data(),
         }
 
     def _build_contract_codes(self, today: datetime.date, symbol: str) -> List[str]:
@@ -255,6 +259,20 @@ class FuturesMonitorService:
         }
         if self.basis_history:
             data["annualized_percentile"] = self.basis_history.get_percentile(symbol, quote.annualized_basis)
+        return data
+
+    def _get_vix_data(self) -> List[Dict]:
+        if self.pro is None or self.vix_service is None:
+            return []
+        now = time.time()
+        if self._vix_cache["timestamp"] and now - self._vix_cache["timestamp"] < 60:
+            return self._vix_cache["data"]
+        try:
+            data = self.vix_service.get_vix_snapshots()
+        except Exception as exc:
+            Logger.error(f"option VIX calc failed: {exc}")
+            data = []
+        self._vix_cache = {"timestamp": now, "data": data}
         return data
 
     def _value_at(self, fields: List[str], idx: int) -> Optional[str]:

@@ -20,6 +20,7 @@
                     <a href="{{ url_for('fear_greed') }}">美股情绪</a>
                     <a href="{{ url_for('cn_fear') }}">A股情绪</a>
                     <a href="{{ url_for('monitor_page') }}" class="active">实时监控</a>
+                    <a href="{{ url_for('after_hours_page') }}">盘后监控</a>
                 </nav>
             </div>
         </div>
@@ -39,6 +40,33 @@
 
             <div id="monitor-alert" class="alert alert-danger d-none" role="alert"></div>
 
+            <div class="card mb-4">
+                <div class="card-header d-flex flex-column flex-lg-row justify-content-between align-items-lg-center">
+                    <div>
+                        <div class="text-uppercase small text-muted">波动率监控</div>
+                        <h5 class="mb-0">上证50 / 沪深300 / 中证500 / 中证1000 期权 VIX</h5>
+                    </div>
+                    <span class="text-muted small">方法：TuShare 获取 ETF 期权列表 + 新浪实时报价 → 近月/次月 OTM 合约按 CBOE VIX 公式计算 → 插值至 30 天目标波动率</span>
+                </div>
+                <div class="card-body">
+                    <div id="vix-empty" class="text-center text-muted small py-2">VIX 数据加载中...</div>
+                    <div class="row g-3" id="vix-container"></div>
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center flex-column flex-lg-row">
+                    <div>
+                        <div class="text-uppercase small text-muted">历史</div>
+                        <h5 class="mb-0">隐含波动率 · 收盘曲线（近一年）</h5>
+                    </div>
+                    <span class="small text-muted">数据在北京时间 15:00 以后写入，供追踪日度变化</span>
+                </div>
+                <div class="card-body">
+                    <canvas id="vix-history-chart" height="140"></canvas>
+                </div>
+            </div>
+
             <div id="monitor-container" class="row gy-4">
                 <div class="col-12">
                     <div class="text-center py-5 text-muted">
@@ -54,6 +82,13 @@
         const API_URL = "{{ url_for('monitor_data') }}";
         const REFRESH_MS = 15000;
         let timerId = null;
+        let vixHistoryChart = null;
+        const VIX_COLOR_MAP = {
+            IH: 'rgba(220,53,69,1)',
+            IF: 'rgba(13,110,253,1)',
+            IC: 'rgba(25,135,84,1)',
+            IM: 'rgba(255,193,7,1)',
+        };
 
         function formatNumber(value, digits = 2) {
             if (value === null || value === undefined || isNaN(value)) {
@@ -162,6 +197,97 @@
             }).join('');
         }
 
+        function renderVix(items) {
+            const grid = document.getElementById('vix-container');
+            const empty = document.getElementById('vix-empty');
+            if (!grid) return;
+            if (!items || !items.length) {
+                grid.innerHTML = '';
+                if (empty) empty.textContent = '暂无 VIX 数据';
+                return;
+            }
+            if (empty) empty.textContent = '';
+            grid.innerHTML = items.map(item => {
+                const value = (item.vix_value !== undefined && item.vix_value !== null)
+                    ? formatPercent(item.vix_value, 2)
+                    : '—';
+                const legs = (item.legs || []).map(leg => `
+                    <div class="small text-muted">
+                        到期 ${leg.maturity} · ${leg.days_to_expiry} 天 · σ ${formatPercent(leg.sigma, 2)}
+                    </div>
+                `).join('') || '<div class="small text-muted">暂无有效期权</div>';
+                const footer = item.timestamp ? ` · ${item.timestamp}` : '';
+                return `
+                <div class="col-12 col-md-6 col-lg-3">
+                    <div class="border rounded p-3 h-100 d-flex flex-column">
+                        <div class="muted small">${item.index_name} (${item.index_code})</div>
+                        <div class="display-6 fw-bold mb-2">${value}</div>
+                        <div class="muted small mb-2">期权族 ${item.option_family || '—'} · 无风险 ${formatPercent(((item.risk_free_rate || 0) * 100), 2)}</div>
+                        ${legs}
+                        ${item.error ? `<div class="text-danger small mt-2">${item.error}</div>` : ''}
+                        <div class="mt-auto small text-muted">来源：${item.source || '期权数据'}${footer}</div>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function renderVixHistory(history) {
+            const canvas = document.getElementById('vix-history-chart');
+            if (!canvas) return;
+            const labelsSet = new Set();
+            Object.values(history || {}).forEach(entries => {
+                (entries || []).forEach(item => labelsSet.add(String(item.date)));
+            });
+            const labels = Array.from(labelsSet).sort();
+            if (!labels.length) {
+                if (vixHistoryChart) {
+                    vixHistoryChart.destroy();
+                    vixHistoryChart = null;
+                }
+                return;
+            }
+            const datasets = Object.entries(history || {}).map(([symbol, entries]) => {
+                const map = new Map(entries.map(item => [String(item.date), item.value]));
+                const color = VIX_COLOR_MAP[symbol] || 'rgba(108,117,125,1)';
+                return {
+                    label: symbol,
+                    data: labels.map(label => map.get(label) ?? null),
+                    borderColor: color,
+                    backgroundColor: color.replace('1)', '0.08)'),
+                    spanGaps: true,
+                    tension: 0.2,
+                    pointRadius: 0,
+                    fill: false,
+                };
+            });
+            if (vixHistoryChart) {
+                vixHistoryChart.destroy();
+            }
+            vixHistoryChart = new Chart(canvas.getContext('2d'), {
+                type: 'line',
+                data: { labels, datasets },
+                options: {
+                    responsive: true,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { position: 'bottom' },
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => `${ctx.dataset.label}: ${formatPercent(ctx.parsed.y, 2)}`
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            ticks: {
+                                callback: val => formatPercent(val, 1)
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
         async function fetchMonitorData() {
             try {
                 const res = await fetch(API_URL, { cache: 'no-store' });
@@ -171,6 +297,8 @@
                 const data = await res.json();
                 document.getElementById('monitor-alert').classList.add('d-none');
                 renderItems(data);
+                renderVix(data.vix || []);
+                renderVixHistory(data.vix_history || {});
                 document.getElementById('last-update').textContent = new Date(data.generated_at).toLocaleString('zh-CN', { hour12: false });
             } catch (err) {
                 console.error(err);

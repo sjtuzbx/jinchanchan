@@ -28,6 +28,8 @@ from services.backtest_service import BacktestService
 from services.strategy_store import StrategyStore
 from services.monitor_service import FuturesMonitorService
 from services.basis_history import BasisHistory
+from services.vix_history import VixHistoryStore
+from services.afterhours_service import AfterHoursService
 
 import tushare as ts
 try:
@@ -49,7 +51,9 @@ backtest_service = BacktestService('strategy_config.json.template', stock_name_c
 strategy_store = StrategyStore(Path(__file__).resolve().parent / "data" / "saved_strategies.json")
 basis_history = BasisHistory(pro, Path(__file__).resolve().parent / "data" / "futures_basis_history.json")
 basis_history.ensure_latest()
-monitor_service = FuturesMonitorService(basis_history=basis_history)
+monitor_service = FuturesMonitorService(basis_history=basis_history, pro_client=pro)
+vix_history_store = VixHistoryStore(Path(__file__).resolve().parent / "data" / "vix_history.json")
+after_hours_service = AfterHoursService(pro, Path(__file__).resolve().parent / "data" / "after_hours_history.json")
 
 DEBUG_MODE = os.getenv("JC_DEBUG", "0") == "1"
 
@@ -72,6 +76,35 @@ app = Flask(__name__)
 # 当前日期作为默认筛选日期
 TODAY = datetime.date.today().isoformat()
 screener = Screener('strategy_config.json.template')
+TRADE_DAY_CACHE = {}
+
+
+def resolve_trade_date_for_cutoff(cutoff_hour: int = 15) -> str:
+    """Return latest trade date string based on cutoff hour (Beijing time)."""
+    now = beijing_now()
+    base_date = now.date() if now.hour >= cutoff_hour else now.date() - datetime.timedelta(days=1)
+    return ensure_trade_date(base_date)
+
+
+def ensure_trade_date(date_obj: datetime.date) -> str:
+    for offset in range(10):
+        candidate = date_obj - datetime.timedelta(days=offset)
+        date_str = candidate.strftime("%Y%m%d")
+        if is_trade_day(date_str):
+            return date_str
+    return date_obj.strftime("%Y%m%d")
+
+
+def is_trade_day(date_str: str) -> bool:
+    if date_str in TRADE_DAY_CACHE:
+        return TRADE_DAY_CACHE[date_str]
+    try:
+        cal = pro.trade_cal(exchange="SSE", start_date=date_str, end_date=date_str)
+        is_open = bool(cal is not None and not cal.empty and str(cal.iloc[0]["is_open"]) == "1")
+    except Exception:
+        is_open = False
+    TRADE_DAY_CACHE[date_str] = is_open
+    return is_open
 
 
 def no_cache(view):
@@ -396,10 +429,26 @@ def monitor_page():
 def monitor_data():
     try:
         payload = monitor_service.get_monitor_payload()
-        return jsonify(payload)
+        trade_date = resolve_trade_date_for_cutoff(15)
+        vix_history_store.record(trade_date, payload.get("vix", []))
+        payload["vix_history"] = vix_history_store.get_history()
+        return jsonify(convert_numpy_types(payload))
     except Exception as exc:
         Logger.error(f"fetch monitor data failed: {exc}")
         return jsonify({"error": "获取监控数据失败"}), 500
+
+@app.route('/after-hours')
+def after_hours_page():
+    return render_template('after_hours.html')
+
+@app.route('/after-hours/data')
+def after_hours_data():
+    try:
+        payload = after_hours_service.get_payload()
+        return jsonify(convert_numpy_types(payload))
+    except Exception as exc:
+        Logger.error(f"fetch after-hours data failed: {exc}")
+        return jsonify({"error": "获取盘后监控数据失败"}), 500
 
 @app.route('/cn-fear')
 def cn_fear():
