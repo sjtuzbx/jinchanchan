@@ -1,0 +1,44 @@
+[
+  {
+    "filter": {
+      "exclude_exchanges": [
+        "kcb",
+        "cyb",
+        "bse"
+      ],
+      "exclude_st": "true",
+      "filter_pe_gt_zero": "true"
+    },
+    "params": {
+      "start_date": "2024-12-17",
+      "end_date": "2025-12-17",
+      "hold_stocks": "20",
+      "rebalance_period": "5",
+      "weight_method": "equal",
+      "rebalance_time": "open"
+    },
+    "name": "xsz20",
+    "updated_at": "2025-12-17T12:37:45.063072"
+  },
+  {
+    "filter": {
+      "exclude_exchanges": [
+        "main",
+        "kcb",
+        "cyb"
+      ],
+      "exclude_st": "true",
+      "filter_pe_gt_zero": "true"
+    },
+    "params": {
+      "start_date": "2024-12-17",
+      "end_date": "2025-12-16",
+      "hold_stocks": "20",
+      "rebalance_period": "5",
+      "weight_method": "equal",
+      "rebalance_time": "open"
+    },
+    "name": "bse20",
+    "updated_at": "2025-12-17T12:39:13.230784"
+  }
+]

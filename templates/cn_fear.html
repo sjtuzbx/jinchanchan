@@ -116,6 +116,26 @@
                     <span class="muted small">文件: data/cn_sentiment_history.csv</span>
                 </div>
                 <div class="card-body">
+                    <form method="get" class="row g-2 align-items-end mb-3">
+                        <input type="hidden" name="page" value="1">
+                        {% if trade_date %}
+                        <input type="hidden" name="trade_date" value="{{ trade_date }}">
+                        {% endif %}
+                        <div class="col-12 col-sm-4 col-md-3">
+                            <label class="form-label small text-muted mb-1">最低得分</label>
+                            <input type="number" step="0.01" class="form-control" name="score_min" value="{{ score_min_value }}">
+                        </div>
+                        <div class="col-12 col-sm-4 col-md-3">
+                            <label class="form-label small text-muted mb-1">最高得分</label>
+                            <input type="number" step="0.01" class="form-control" name="score_max" value="{{ score_max_value }}">
+                        </div>
+                        <div class="col-auto">
+                            <button type="submit" class="btn btn-primary">筛选</button>
+                        </div>
+                        <div class="col-auto">
+                            <a class="btn btn-outline-secondary" href="{{ url_for('cn_fear') }}">重置</a>
+                        </div>
+                    </form>
                     {% if history_table %}
                     <div class="table-responsive">
                         <table class="table table-hover align-middle mb-0">
@@ -147,8 +167,23 @@
                             </tbody>
                         </table>
                     </div>
+                    <div class="d-flex justify-content-between align-items-center mt-3">
+                        <div class="text-muted small">
+                            共 {{ pagination.total }} 条记录 · 每页20条 · 第 {{ pagination.page }}/{{ pagination.total_pages }} 页
+                        </div>
+                        <nav>
+                            <ul class="pagination pagination-sm mb-0">
+                                <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+                                    <a class="page-link" href="{{ url_for('cn_fear', page=pagination.page - 1 if pagination.has_prev else 1, score_min=score_min_value or None, score_max=score_max_value or None, trade_date=trade_date) }}">上一页</a>
+                                </li>
+                                <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+                                    <a class="page-link" href="{{ url_for('cn_fear', page=pagination.page + 1 if pagination.has_next else pagination.page, score_min=score_min_value or None, score_max=score_max_value or None, trade_date=trade_date) }}">下一页</a>
+                                </li>
+                            </ul>
+                        </nav>
+                    </div>
                     {% else %}
-                    <div class="muted text-center">暂无历史记录</div>
+                    <div class="muted text-center">暂无符合条件的记录</div>
                     {% endif %}
                 </div>
             </div>

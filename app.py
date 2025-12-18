@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for
 import json
+import math
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -24,6 +25,7 @@ from services.utils import (
 )
 from services.name_cache import StockNameCache
 from services.backtest_service import BacktestService
+from services.strategy_store import StrategyStore
 
 import tushare as ts
 try:
@@ -42,6 +44,7 @@ pro = ts.pro_api(token)
 stock_name_cache = StockNameCache(pro, cache_file=Path(__file__).resolve().parent / "data" / "stock_names.json")
 stock_name_cache.ensure_cache()
 backtest_service = BacktestService('strategy_config.json.template', stock_name_cache)
+strategy_store = StrategyStore(Path(__file__).resolve().parent / "data" / "saved_strategies.json")
 
 DEBUG_MODE = os.getenv("JC_DEBUG", "0") == "1"
 
@@ -57,6 +60,7 @@ FEAR_GREED_HEADERS = {
     "Referer": "https://www.cnn.com/markets/fear-and-greed"
 }
 CN_HISTORY_CSV = Path(__file__).resolve().parent / "data" / "cn_sentiment_history.csv"
+MANDATORY_SENTIMENT_DATES = {"20251210", "20251216"}
 
 app = Flask(__name__)
 
@@ -283,10 +287,30 @@ def persist_cn_sentiment(trade_date, main, subs):
             return
     df_new.to_csv(CN_HISTORY_CSV, mode='a', index=False, header=not CN_HISTORY_CSV.exists())
 
-def load_cn_history():
-    if not CN_HISTORY_CSV.exists():
+def load_cn_history(required_dates=None):
+    """加载历史数据，必要时补齐必需日期"""
+    required = set(MANDATORY_SENTIMENT_DATES)
+    if required_dates:
+        required.update(str(d).replace("-", "") for d in required_dates)
+
+    df = pd.read_csv(CN_HISTORY_CSV) if CN_HISTORY_CSV.exists() else pd.DataFrame()
+    existing_dates = set(df["trade_date"].astype(str)) if not df.empty else set()
+
+    missing = sorted(required - existing_dates)
+    if missing:
+        for d in missing:
+            try:
+                res = compute_cn_sentiment(d)
+                if res:
+                    persist_cn_sentiment(res["trade_date"], res["main"], res["subs"])
+                    Logger.info(f"补全缺失情绪数据: {d}")
+            except Exception as exc:
+                Logger.error(f"补全情绪数据失败: {d}, err={exc}")
+        df = pd.read_csv(CN_HISTORY_CSV) if CN_HISTORY_CSV.exists() else pd.DataFrame()
+
+    if df.empty:
         return []
-    df = pd.read_csv(CN_HISTORY_CSV)
+
     df = df.sort_values("trade_date")
     return df.to_dict(orient="records")
 
@@ -365,6 +389,24 @@ def cn_fear():
     if trade_date and "-" in trade_date:
         trade_date = trade_date.replace("-", "")
     try:
+        page = int(request.args.get("page", 1))
+        page = max(page, 1)
+    except (TypeError, ValueError):
+        page = 1
+    score_min_raw = request.args.get("score_min")
+    score_max_raw = request.args.get("score_max")
+
+    def parse_score(val):
+        try:
+            return float(val)
+        except (TypeError, ValueError):
+            return None
+
+    score_min_val = parse_score(score_min_raw)
+    score_max_val = parse_score(score_max_raw)
+    per_page = 20
+
+    try:
         result = compute_cn_sentiment(trade_date)
         if result:
             persist_cn_sentiment(result["trade_date"], result["main"], result["subs"])
@@ -402,13 +444,45 @@ def cn_fear():
             for rec in history_records
         ]
 
+    history_desc = list(reversed(history_records))
+
+    def match_score(row):
+        score = row.get("score")
+        if score_min_val is not None and (score is None or float(score) < score_min_val):
+            return False
+        if score_max_val is not None and (score is None or float(score) > score_max_val):
+            return False
+        return True
+
+    filtered_records = [rec for rec in history_desc if match_score(rec)]
+    total_filtered = len(filtered_records)
+    if total_filtered == 0:
+        total_pages = 1
+        page = 1
+    else:
+        total_pages = max(1, math.ceil(total_filtered / per_page))
+        page = min(page, total_pages)
+    start_idx = (page - 1) * per_page
+    history_page = filtered_records[start_idx:start_idx + per_page]
+
+    pagination = {
+        "page": page,
+        "total_pages": total_pages,
+        "has_prev": page > 1,
+        "has_next": page < total_pages,
+        "total": total_filtered
+    }
+
     return render_template(
         'cn_fear.html',
         main=main,
         history=history,
         sub_indicators=subs,
         trade_date=trade_date or (result["trade_date"] if result else None),
-        history_table=history_records[::-1],  # 逆序便于展示最近的
+        history_table=history_page,
+        pagination=pagination,
+        score_min_value=score_min_raw or "",
+        score_max_value=score_max_raw or "",
         error=error
     )
 
@@ -487,7 +561,7 @@ def run_screener():
 
     return render_template('result.html',
                            stocks=res[:20],
-                           has_more=len(res) > 20,
+                           total_count=len(res),
                            error=error_msg,
                            filter_date=filter_date,
                            exclude_exchanges=exclude_exchanges,
@@ -540,6 +614,35 @@ def run_backtest():
         Logger.error(f"backtest failed: {ex}")
         Logger.error(traceback.format_exc())
         return jsonify({"error": "回测失败", "message": str(ex)}), 500
+
+
+@app.route('/strategies', methods=['GET', 'POST'])
+def strategies():
+    if request.method == 'GET':
+        return jsonify(strategy_store.list_strategies())
+    data = request.get_json() or {}
+    name = data.get("name")
+    if not name:
+        return jsonify({"error": "策略名称不能为空"}), 400
+    payload = {
+        "filter": data.get("filter"),
+        "params": data.get("params")
+    }
+    strategy_store.save(name, payload)
+    return jsonify({"status": "ok"})
+
+
+@app.route('/strategies/<name>', methods=['GET'])
+def get_strategy(name):
+    item = strategy_store.get(name)
+    if not item:
+        return jsonify({"error": "策略不存在"}), 404
+    return jsonify(item)
+
+
+@app.route('/portfolio')
+def portfolio_page():
+    return render_template('portfolio.html')
 
 
 def generate_backtest_results(params):
@@ -609,3 +712,92 @@ def generate_backtest_results(params):
 
 if __name__ == '__main__':
     app.run('0.0.0.0', port=5000)
+@app.route('/portfolio/backtest', methods=['POST'])
+def portfolio_backtest():
+    data = request.get_json() or {}
+    names = data.get('strategies') or []
+    if len(names) < 2:
+        return jsonify({"error": "至少选择两个策略"}), 400
+    if len(names) > 3:
+        return jsonify({"error": "最多同时评估3个策略"}), 400
+    weight_step = float(data.get('weight_step', 0.25))
+    if weight_step <= 0 or weight_step > 0.5:
+        return jsonify({"error": "权重步长需在0.1-0.5之间"}), 400
+
+    strategy_defs = []
+    for name in names:
+        item = strategy_store.get(name)
+        if not item:
+            return jsonify({"error": f"策略 {name} 不存在"}), 404
+        strategy_defs.append(item)
+
+    strategy_runs = []
+    for item in strategy_defs:
+        result = backtest_service.run(item['filter'], item['params'])
+        nav_series = dict(zip(result['chart_data']['labels'], result['chart_data']['strategy']))
+        strategy_runs.append({
+            "name": item['name'],
+            "labels": result['chart_data']['labels'],
+            "nav": nav_series
+        })
+
+    common_labels = sorted(set.intersection(*[set(run['labels']) for run in strategy_runs]))
+    if not common_labels:
+        return jsonify({"error": "所选策略时间区间不一致，没有可比较数据"}), 400
+
+    def enumerate_weights(n, step):
+        values = [round(i * step, 4) for i in range(int(1/step)+1)]
+        combos = []
+        def helper(idx, remaining, current):
+            if idx == n - 1:
+                current.append(round(remaining, 4))
+                if current[-1] >= 0:
+                    combos.append(current.copy())
+                current.pop()
+                return
+            for v in values:
+                if v <= remaining:
+                    current.append(v)
+                    helper(idx + 1, round(remaining - v, 4), current)
+                    current.pop()
+        helper(0, 1.0, [])
+        return [combo for combo in combos if all(w >= 0) and abs(sum(combo) - 1) < 1e-3]
+
+    combos = enumerate_weights(len(strategy_runs), weight_step)
+    if not combos:
+        return jsonify({"error": "无法根据当前步长生成权重组合"}), 400
+
+    portfolios = []
+    dates = [datetime.datetime.strptime(lbl, "%Y-%m-%d") for lbl in common_labels]
+    days = (dates[-1] - dates[0]).days or 1
+    for combo in combos:
+        nav = []
+        for lbl in common_labels:
+            value = 0
+            for weight, run in zip(combo, strategy_runs):
+                value += weight * run['nav'][lbl]
+            nav.append(value)
+        daily_returns = [nav[i] / nav[i-1] - 1 for i in range(1, len(nav))]
+        total_return = nav[-1] / nav[0] - 1
+        annual_return = (nav[-1] / nav[0]) ** (365 / days) - 1
+        sharpe = 0
+        if daily_returns:
+            risk = np.std(daily_returns) * np.sqrt(252)
+            if risk != 0:
+                sharpe = (nav[-1] / nav[0] - 1) / risk
+        portfolios.append({
+            "label": " + ".join(f"{name}:{int(w*100)}%" for name, w in zip(names, combo)),
+            "weights": combo,
+            "total_return": total_return,
+            "annual_return": annual_return,
+            "sharpe_ratio": sharpe
+        })
+
+    best_return = max(portfolios, key=lambda x: x['annual_return'], default=None)
+    best_sharpe = max(portfolios, key=lambda x: x['sharpe_ratio'], default=None)
+    return jsonify({
+        "strategy_names": names,
+        "portfolios": portfolios,
+        "best_return": best_return,
+        "best_sharpe": best_sharpe
+    })

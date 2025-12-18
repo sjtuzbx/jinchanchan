@@ -18,6 +18,7 @@
                 <nav class="console-nav">
                     <a href="{{ url_for('index') }}">筛选</a>
                     <a href="{{ url_for('backtest_page') }}" class="active">回测</a>
+                    <a href="{{ url_for('portfolio_page') }}">组合回测</a>
                     <a href="{{ url_for('fear_greed') }}">美股情绪</a>
                     <a href="{{ url_for('cn_fear') }}">A股情绪</a>
                 </nav>
@@ -144,7 +145,15 @@
             <div class="card mt-3" id="backtest-results">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="card-title mb-0">回测结果</h5>
-                    <span class="muted small">动态生成图表与指标</span>
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="input-group input-group-sm" style="width:220px;">
+                            <label class="input-group-text" for="saved-strategy-select">策略</label>
+                            <select id="saved-strategy-select" class="form-select" onchange="loadSelectedStrategy()">
+                                <option value="">加载保存策略...</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="saveCurrentStrategy()">保存策略</button>
+                    </div>
                 </div>
                 <div class="card-body" id="results-content">
                     <div class="text-center muted">请设置参数并点击“开始回测”</div>
@@ -161,6 +170,7 @@
         }
         let performanceChart = null;
         let monthlyReturnChart = null;
+        let savedStrategies = [];
         let positionHistoryData = [];
         let tradeHistoryData = [];
         let tradeReturnsData = [];
@@ -185,15 +195,22 @@
             return data;
         }
 
-        function runBacktest() {
-            const filterData = getFormDataAsObject(document.getElementById('screener-form'));
-            const startDate = document.getElementById('start-date').value;
-            const endDate = document.getElementById('end-date').value;
-            const holdStocks = parseInt(document.getElementById('hold-stocks').value);
-            const rebalancePeriod = document.getElementById('rebalance-period').value;
-            const weightMethod = document.getElementById('weight-method').value;
-            const rebalanceTime = document.querySelector('input[name="rebalance-time"]:checked').value;
+        function getCurrentStrategyConfig() {
+            return {
+                filter: getFormDataAsObject(document.getElementById('screener-form')),
+                params: {
+                    start_date: document.getElementById('start-date').value,
+                    end_date: document.getElementById('end-date').value,
+                    hold_stocks: document.getElementById('hold-stocks').value,
+                    rebalance_period: document.getElementById('rebalance-period').value,
+                    weight_method: document.getElementById('weight-method').value,
+                    rebalance_time: document.querySelector('input[name="rebalance-time"]:checked').value
+                }
+            };
+        }
 
+        function runBacktest() {
+            const { filter, params } = getCurrentStrategyConfig();
             const resultsSection = document.getElementById('backtest-results');
             resultsSection.style.display = 'block';
             const resultsContent = document.getElementById('results-content');
@@ -212,17 +229,7 @@
             fetch('/backtest', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    filter: filterData,
-                    params: {
-                        start_date: startDate,
-                        end_date: endDate,
-                        hold_stocks: holdStocks,
-                        rebalance_period: rebalancePeriod,
-                        weight_method: weightMethod,
-                        rebalance_time: rebalanceTime
-                    }
-                })
+                body: JSON.stringify({ filter, params })
             }).then(r => {
                 if (!r.ok) throw new Error('状态码 ' + r.status);
                 return r.json();
@@ -231,6 +238,70 @@
             }).catch(err => {
                 resultsContent.innerHTML = `<div class="alert alert-danger mb-0">回测失败：${err}</div>`;
             });
+        }
+
+        function refreshSavedStrategies() {
+            fetch('/strategies').then(r => r.json()).then(data => {
+                savedStrategies = data;
+                const select = document.getElementById('saved-strategy-select');
+                select.innerHTML = '<option value=\"\">加载保存策略...</option>';
+                savedStrategies.forEach(item => {
+                    const opt = document.createElement('option');
+                    opt.value = item.name;
+                    opt.textContent = item.name;
+                    select.appendChild(opt);
+                });
+            });
+        }
+
+        function saveCurrentStrategy() {
+            const name = prompt('请输入策略名称');
+            if (!name) return;
+            const config = getCurrentStrategyConfig();
+            fetch('/strategies', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, ...config })
+            }).then(r => {
+                if (!r.ok) throw new Error('保存失败');
+                alert('策略已保存');
+                refreshSavedStrategies();
+            }).catch(err => alert(err));
+        }
+
+        function loadSelectedStrategy() {
+            const name = document.getElementById('saved-strategy-select').value;
+            if (!name) return;
+            fetch(`/strategies/${name}`).then(r => {
+                if (!r.ok) throw new Error('加载失败');
+                return r.json();
+            }).then(data => applyStrategyConfig(data)).catch(err => alert(err));
+        }
+
+        function applyStrategyConfig(data) {
+            const filter = data.filter || {};
+            const params = data.params || {};
+            // filter form
+            const excludeInputs = document.querySelectorAll('#screener-form input[type=\"checkbox\"][name=\"exclude_exchanges[]\"], #screener-form input[type=\"checkbox\"][name=\"exclude_exchanges\"]');
+            excludeInputs.forEach(input => {
+                input.checked = Array.isArray(filter.exclude_exchanges) && filter.exclude_exchanges.includes(input.value);
+            });
+            document.getElementById('exclude-st').checked = !!filter.exclude_st;
+            const filterPe = document.getElementById('filter-pe');
+            if (filterPe) filterPe.checked = !!filter.filter_pe_gt_zero;
+            const filterDateInput = document.querySelector('input[name=\"filter_date\"]');
+            if (filter.filter_date && filterDateInput) filterDateInput.value = filter.filter_date;
+
+            // backtest params
+            if (params.start_date) document.getElementById('start-date').value = params.start_date;
+            if (params.end_date) document.getElementById('end-date').value = params.end_date;
+            if (params.hold_stocks) document.getElementById('hold-stocks').value = params.hold_stocks;
+            if (params.rebalance_period) document.getElementById('rebalance-period').value = params.rebalance_period;
+            if (params.weight_method) document.getElementById('weight-method').value = params.weight_method;
+            if (params.rebalance_time) {
+                const radio = document.querySelector(`input[name=\"rebalance-time\"][value=\"${params.rebalance_time}\"]`);
+                if (radio) radio.checked = true;
+            }
         }
 
         function pct(value, absolute = false) {
@@ -588,6 +659,10 @@
             `).join('');
             tbody.innerHTML = rows;
         }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            refreshSavedStrategies();
+        });
 
     </script>
 </body>
