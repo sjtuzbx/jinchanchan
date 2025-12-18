@@ -3,6 +3,8 @@ import json
 from pathlib import Path
 from typing import Dict, List, Optional
 
+import pandas as pd
+
 from logger import Logger
 from services.utils import beijing_now
 
@@ -57,6 +59,8 @@ class AfterHoursHistoryStore:
 class AfterHoursService:
     """Compute after-hours turnover and financing indicators."""
 
+    HISTORY_DAYS = 260
+
     def __init__(self, pro_client, cache_file: Path):
         self.pro = pro_client
         self.store = AfterHoursHistoryStore(cache_file)
@@ -64,6 +68,8 @@ class AfterHoursService:
 
     def get_payload(self) -> Dict:
         trade_date = self._determine_target_trade_date()
+        if trade_date:
+            self._ensure_history(trade_date)
         if trade_date and not self.store.has_date(trade_date):
             record = self._compute_record(trade_date)
             if record:
@@ -75,6 +81,41 @@ class AfterHoursService:
             "latest": latest,
             "history": history[-250:],
         }
+
+    def _ensure_history(self, upto_date: str):
+        history = self.store.get_history()
+        existing = {rec.get("trade_date") for rec in history}
+        if len(existing) >= self.HISTORY_DAYS and upto_date in existing:
+            return
+        try:
+            upto_dt = datetime.datetime.strptime(upto_date, "%Y%m%d").date()
+        except ValueError:
+            return
+        start_dt = upto_dt - datetime.timedelta(days=self.HISTORY_DAYS * 2)
+        try:
+            cal = self.pro.trade_cal(
+                exchange="SSE",
+                start_date=start_dt.strftime("%Y%m%d"),
+                end_date=upto_date,
+                is_open="1",
+            )
+        except Exception as exc:
+            Logger.error(f"after-hours trade cal failed: {exc}")
+            return
+        if cal is None or cal.empty:
+            return
+        calendar_days = cal["cal_date"].astype(str).tolist()
+        target_dates = [d for d in calendar_days if d <= upto_date][-self.HISTORY_DAYS :]
+        missing = [d for d in target_dates if d not in existing]
+        if not missing:
+            return
+        start_range = missing[0]
+        end_range = missing[-1]
+        mv_map, turnover_map, margin_map = self._bulk_collect(start_range, end_range)
+        for date in missing:
+            record = self._build_record_from_maps(date, mv_map, turnover_map, margin_map)
+            if record:
+                self.store.upsert(record)
 
     def _compute_record(self, trade_date: str) -> Optional[Dict]:
         try:
@@ -106,6 +147,45 @@ class AfterHoursService:
             "margin_ratio": margin_ratio,
         }
         return record
+
+    def _bulk_collect(self, start: str, end: str):
+        mv_map: Dict[str, float] = {}
+        turnover_map: Dict[str, float] = {}
+        margin_map: Dict[str, float] = {}
+        try:
+            basic = self.pro.daily_basic(start_date=start, end_date=end, fields="trade_date,total_mv")
+            if basic is not None and not basic.empty:
+                mv_map = (basic.groupby("trade_date")["total_mv"].sum() * 1e4).to_dict()
+        except Exception as exc:
+            Logger.error(f"bulk daily_basic failed: {exc}")
+        try:
+            daily = self.pro.daily(start_date=start, end_date=end, fields="trade_date,amount")
+            if daily is not None and not daily.empty:
+                turnover_map = (daily.groupby("trade_date")["amount"].sum() * 1e3).to_dict()
+        except Exception as exc:
+            Logger.error(f"bulk daily failed: {exc}")
+        try:
+            margin = self.pro.margin(start_date=start, end_date=end, fields="trade_date,rzmre")
+            if margin is not None and not margin.empty:
+                margin_map = margin.groupby("trade_date")["rzmre"].sum().to_dict()
+        except Exception as exc:
+            Logger.error(f"bulk margin failed: {exc}")
+        return mv_map, turnover_map, margin_map
+
+    def _build_record_from_maps(self, trade_date: str, mv_map: Dict[str, float], turnover_map: Dict[str, float], margin_map: Dict[str, float]) -> Optional[Dict]:
+        total_mv = mv_map.get(trade_date)
+        turnover_amount = turnover_map.get(trade_date)
+        if total_mv in (None, 0) or turnover_amount in (None, 0):
+            return None
+        margin_buy = margin_map.get(trade_date, 0.0)
+        return {
+            "trade_date": trade_date,
+            "total_market_value": float(total_mv),
+            "turnover_amount": float(turnover_amount),
+            "turnover_ratio": float(turnover_amount) / float(total_mv) if total_mv else None,
+            "margin_buy_amount": float(margin_buy),
+            "margin_ratio": float(margin_buy) / float(turnover_amount) if turnover_amount else None,
+        }
 
     def _determine_target_trade_date(self) -> Optional[str]:
         now = beijing_now()
