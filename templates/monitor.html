@@ -76,7 +76,7 @@
 
         function renderContracts(item) {
             if (!item.contracts || !item.contracts.length) {
-                return `<tr><td colspan="11" class="text-center text-muted">暂无实时数据</td></tr>`;
+                return `<tr><td colspan="12" class="text-center text-muted">暂无实时数据</td></tr>`;
             }
             const spotVal = formatNumber(item.spot_price, 2);
             return item.contracts.map(contract => {
@@ -94,6 +94,7 @@
                     <td class="${basisCls}">${formatNumber(contract.basis, 2)}</td>
                     <td class="${basisCls}">${formatPercent(contract.basis_pct, 2)}</td>
                     <td class="${basisCls}">${formatPercent(contract.annualized_basis, 2)}</td>
+                    <td>${formatPercent(contract.annualized_percentile, 2)}</td>
                     <td class="${basisCls}">${formatNumber(contract.daily_basis, 4)}</td>
                 </tr>`;
             }).join('');
@@ -147,6 +148,7 @@
                                         <th>基差</th>
                                         <th>基差%</th>
                                         <th>年化基差</th>
+                                        <th>5年分位</th>
                                         <th>日平折价</th>
                                     </tr>
                                 </thead>

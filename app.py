@@ -27,6 +27,7 @@ from services.name_cache import StockNameCache
 from services.backtest_service import BacktestService
 from services.strategy_store import StrategyStore
 from services.monitor_service import FuturesMonitorService
+from services.basis_history import BasisHistory
 
 import tushare as ts
 try:
@@ -46,7 +47,9 @@ stock_name_cache = StockNameCache(pro, cache_file=Path(__file__).resolve().paren
 stock_name_cache.ensure_cache()
 backtest_service = BacktestService('strategy_config.json.template', stock_name_cache)
 strategy_store = StrategyStore(Path(__file__).resolve().parent / "data" / "saved_strategies.json")
-monitor_service = FuturesMonitorService()
+basis_history = BasisHistory(pro, Path(__file__).resolve().parent / "data" / "futures_basis_history.json")
+basis_history.ensure_latest()
+monitor_service = FuturesMonitorService(basis_history=basis_history)
 
 DEBUG_MODE = os.getenv("JC_DEBUG", "0") == "1"
 

@@ -40,9 +40,10 @@ class FuturesMonitorService:
         "IM": {"name": "中证1000期货", "index": "sh000852"},
     }
 
-    def __init__(self):
+    def __init__(self, basis_history=None):
         self.session = requests.Session()
         self.session.headers.update(SINA_HEADERS)
+        self.basis_history = basis_history
 
     def get_monitor_payload(self) -> Dict:
         today = datetime.date.today()
@@ -89,7 +90,7 @@ class FuturesMonitorService:
                     "spot_change_pct": spot_info.get("change_pct"),
                     "index_code": self.SYMBOL_META[symbol]["index"],
                     "spot_detail": spot_info,
-                    "contracts": [self._serialize_contract(row) for row in contract_rows],
+                    "contracts": [self._serialize_contract(symbol, row) for row in contract_rows],
                 }
             )
 
@@ -236,8 +237,8 @@ class FuturesMonitorService:
         third_friday = first_friday + datetime.timedelta(days=14)
         return third_friday
 
-    def _serialize_contract(self, quote: ContractQuote) -> Dict:
-        return {
+    def _serialize_contract(self, symbol: str, quote: ContractQuote) -> Dict:
+        data = {
             "code": quote.contract,
             "last_price": quote.last_price,
             "open_price": quote.open_price,
@@ -252,6 +253,9 @@ class FuturesMonitorService:
             "annualized_basis": quote.annualized_basis,
             "daily_basis": quote.daily_basis,
         }
+        if self.basis_history:
+            data["annualized_percentile"] = self.basis_history.get_percentile(symbol, quote.annualized_basis)
+        return data
 
     def _value_at(self, fields: List[str], idx: int) -> Optional[str]:
         return fields[idx] if idx < len(fields) else None
