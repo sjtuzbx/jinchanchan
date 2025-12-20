@@ -1,0 +1,90 @@
+[
+  {
+    "trade_date": "20251118",
+    "implied_rate": 3.8799972534179688
+  },
+  {
+    "trade_date": "20251119",
+    "implied_rate": 3.87750244140625
+  },
+  {
+    "trade_date": "20251120",
+    "implied_rate": 3.8799972534179688
+  },
+  {
+    "trade_date": "20251121",
+    "implied_rate": 3.8799972534179688
+  },
+  {
+    "trade_date": "20251124",
+    "implied_rate": 3.87750244140625
+  },
+  {
+    "trade_date": "20251125",
+    "implied_rate": 3.875
+  },
+  {
+    "trade_date": "20251126",
+    "implied_rate": 3.875
+  },
+  {
+    "trade_date": "20251128",
+    "implied_rate": 3.87750244140625
+  },
+  {
+    "trade_date": "20251201",
+    "implied_rate": 3.7399978637695312
+  },
+  {
+    "trade_date": "20251202",
+    "implied_rate": 3.7350006103515625
+  },
+  {
+    "trade_date": "20251203",
+    "implied_rate": 3.7300033569335938
+  },
+  {
+    "trade_date": "20251204",
+    "implied_rate": 3.7324981689453125
+  },
+  {
+    "trade_date": "20251205",
+    "implied_rate": 3.7375030517578125
+  },
+  {
+    "trade_date": "20251208",
+    "implied_rate": 3.7324981689453125
+  },
+  {
+    "trade_date": "20251209",
+    "implied_rate": 3.7300033569335938
+  },
+  {
+    "trade_date": "20251210",
+    "implied_rate": 3.722503662109375
+  },
+  {
+    "trade_date": "20251211",
+    "implied_rate": 3.722503662109375
+  },
+  {
+    "trade_date": "20251212",
+    "implied_rate": 3.722503662109375
+  },
+  {
+    "trade_date": "20251215",
+    "implied_rate": 3.722503662109375
+  },
+  {
+    "trade_date": "20251216",
+    "implied_rate": 3.7249984741210938
+  },
+  {
+    "trade_date": "20251217",
+    "implied_rate": 3.7249984741210938
+  },
+  {
+    "trade_date": "20251218",
+    "implied_rate": 3.5749969482421875
+  }
+]

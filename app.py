@@ -31,6 +31,7 @@ from services.basis_history import BasisHistory
 from services.vix_history import VixHistoryStore
 from services.afterhours_service import AfterHoursService
 from services.macro_service import MacroDataService
+from services.fedwatch_service import FedWatchService
 
 import tushare as ts
 try:
@@ -56,6 +57,11 @@ monitor_service = FuturesMonitorService(basis_history=basis_history, pro_client=
 vix_history_store = VixHistoryStore(Path(__file__).resolve().parent / "data" / "vix_history.json")
 after_hours_service = AfterHoursService(pro, Path(__file__).resolve().parent / "data" / "after_hours_history.json")
 macro_service = MacroDataService()
+fedwatch_service = FedWatchService(
+    cache_file=Path(__file__).resolve().parent / "data" / "fedwatch_cache.json",
+    calendar_file=Path(__file__).resolve().parent / "data" / "fomc_calendar.json",
+    history_file=Path(__file__).resolve().parent / "data" / "fedwatch_history.json",
+)
 
 DEBUG_MODE = os.getenv("JC_DEBUG", "0") == "1"
 
@@ -448,6 +454,7 @@ def after_hours_page():
 def after_hours_data():
     try:
         payload = after_hours_service.get_payload()
+        payload["fedwatch"] = fedwatch_service.get_snapshot()
         return jsonify(convert_numpy_types(payload))
     except Exception as exc:
         Logger.error(f"fetch after-hours data failed: {exc}")

@@ -90,6 +90,39 @@
                     <canvas id="margin-chart" height="120"></canvas>
                 </div>
             </div>
+
+            <div class="card mb-4" id="fedwatch-card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">FedWatch 概览</h5>
+                    <small class="text-muted">数据基于FRED + Yahoo Fed Funds期货估算</small>
+                </div>
+                <div class="card-body">
+                    <div id="fedwatch-error" class="alert alert-warning d-none mb-3"></div>
+                    <div class="row" id="fedwatch-content">
+                        <div class="col-12 col-lg-4 mb-3">
+                            <div class="border rounded p-3 h-100">
+                                <div class="text-muted small">当前目标区间</div>
+                                <div class="display-6 fw-bold" id="fed-target-range">--</div>
+                                <div class="text-muted small" id="fed-target-updated">--</div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-lg-4 mb-3">
+                            <div class="border rounded p-3 h-100">
+                                <div class="text-muted small">联邦基金期货隐含利率</div>
+                                <div class="display-6 fw-bold" id="fed-implied-rate">--</div>
+                                <div class="text-muted small" id="fed-futures-updated">--</div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-lg-4 mb-3">
+                            <div class="border rounded p-3 h-100">
+                                <div class="text-muted small">下一次会议概率</div>
+                                <div class="fw-bold" id="fed-probability-desc">--</div>
+                                <div class="text-muted small" id="fed-probability-detail">--</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -183,6 +216,58 @@
             });
         }
 
+        function renderFedWatch(fedwatch) {
+            const card = document.getElementById('fedwatch-card');
+            const errBox = document.getElementById('fedwatch-error');
+            if (!fedwatch) {
+                errBox.textContent = 'FedWatch 数据暂不可用';
+                errBox.classList.remove('d-none');
+                card.classList.remove('d-none');
+                return;
+            }
+            const blockingError = fedwatch.error && !fedwatch.stale;
+            if (blockingError) {
+                errBox.textContent = fedwatch.error;
+                errBox.classList.remove('d-none');
+                card.classList.remove('d-none');
+                return;
+            }
+            const warnings = [];
+            if (fedwatch.warning) warnings.push(fedwatch.warning);
+            if (fedwatch.stale) warnings.push('展示最近一次成功更新的数据');
+            if (warnings.length) {
+                errBox.textContent = warnings.join('；');
+                errBox.classList.remove('d-none');
+            } else {
+                errBox.classList.add('d-none');
+            }
+            card.classList.remove('d-none');
+            const targetRange = fedwatch.current_lower && fedwatch.current_upper
+                ? `${fedwatch.current_lower.toFixed(2)}% - ${fedwatch.current_upper.toFixed(2)}%`
+                : '--';
+            document.getElementById('fed-target-range').textContent = targetRange;
+            document.getElementById('fed-target-updated').textContent = fedwatch.target_updated_at ? `更新：${fedwatch.target_updated_at}` : '更新时间未知';
+
+            if (typeof fedwatch.futures_price === 'number') {
+                document.getElementById('fed-implied-rate').textContent = `${fedwatch.implied_rate.toFixed(2)}%`;
+                document.getElementById('fed-futures-updated').textContent = fedwatch.futures_updated_at ? `更新时间：${fedwatch.futures_updated_at} UTC` : '更新时间未知';
+            } else {
+                document.getElementById('fed-implied-rate').textContent = '—';
+                document.getElementById('fed-futures-updated').textContent = fedwatch.futures_error || '行情缺失';
+            }
+
+            const probs = fedwatch.probabilities;
+            if (!probs) {
+                document.getElementById('fed-probability-desc').textContent = '概率暂不可用';
+                document.getElementById('fed-probability-detail').textContent = fedwatch.futures_error || '等待更新';
+            } else {
+                const descMap = { cut: '降息', hold: '维持', hike: '加息' };
+                const mainDesc = descMap[probs.direction] || '维持';
+                document.getElementById('fed-probability-desc').textContent = `${mainDesc}概率 ${(probs[probs.direction] * 100).toFixed(1)}%`;
+                document.getElementById('fed-probability-detail').textContent = `降息 ${(probs.cut * 100).toFixed(1)}% · 维持 ${(probs.hold * 100).toFixed(1)}% · 加息 ${(probs.hike * 100).toFixed(1)}% · 期望变动 ${probs.expected_change_bp.toFixed(1)}bp`;
+            }
+        }
+
         async function loadAfterHours() {
             try {
                 const resp = await fetch(API_URL, { cache: 'no-store' });
@@ -197,6 +282,9 @@
                 if (history.length) {
                     turnoverChart = buildChart('turnover-chart', history, 'turnover_ratio', 'rgba(13,110,253,1)');
                     marginChart = buildChart('margin-chart', history, 'margin_ratio', 'rgba(220,53,69,1)');
+                }
+                if (payload.fedwatch) {
+                    renderFedWatch(payload.fedwatch);
                 }
             } catch (err) {
                 const alert = document.getElementById('after-hours-alert');

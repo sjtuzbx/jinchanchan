@@ -70,14 +70,18 @@ class AfterHoursService:
         trade_date = self._determine_target_trade_date()
         if trade_date:
             self._ensure_history(trade_date)
+        last_known = self.store.get_latest()
         if trade_date and not self.store.has_date(trade_date):
             record = self._compute_record(trade_date)
+            record = self._apply_margin_fallback(record, last_known)
             if record:
                 self.store.upsert(record)
+                last_known = record
         history = self.store.get_history()
         latest = history[-1] if history else None
         return {
-            "target_trade_date": trade_date,
+            "target_trade_date": (latest or {}).get("trade_date", trade_date),
+            "requested_trade_date": trade_date,
             "latest": latest,
             "history": history[-250:],
         }
@@ -116,12 +120,14 @@ class AfterHoursService:
         last_known = history_sorted[-1] if history_sorted else None
         for date in missing:
             record = self._build_record_from_maps(date, mv_map, turnover_map, margin_map)
+            record = self._apply_margin_fallback(record, last_known)
             if record is None and last_known:
                 record = {
                     **{k: v for k, v in last_known.items() if k != "trade_date"},
                     "trade_date": date,
                     "derived": True,
                 }
+            record = self._apply_margin_fallback(record, last_known)
             if record:
                 self.store.upsert(record)
                 last_known = record
@@ -195,6 +201,23 @@ class AfterHoursService:
             "margin_buy_amount": float(margin_buy),
             "margin_ratio": float(margin_buy) / float(turnover_amount) if turnover_amount else None,
         }
+
+    def _apply_margin_fallback(self, record: Optional[Dict], fallback: Optional[Dict]) -> Optional[Dict]:
+        if not record:
+            return record
+        ratio = record.get("margin_ratio")
+        if ratio not in (None, 0):
+            return record
+        if not fallback:
+            return record
+        if not fallback.get("margin_ratio"):
+            return record
+        combined = dict(record)
+        combined["margin_buy_amount"] = fallback.get("margin_buy_amount")
+        combined["margin_ratio"] = fallback.get("margin_ratio")
+        combined["margin_from"] = fallback.get("trade_date")
+        combined["margin_derived"] = True
+        return combined
 
     def _determine_target_trade_date(self) -> Optional[str]:
         now = beijing_now()
