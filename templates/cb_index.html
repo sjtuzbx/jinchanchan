@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>股票筛选 - 量化控制台</title>
+    <title>可转债筛选 - 量化控制台</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.0/font/bootstrap-icons.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
@@ -15,8 +15,8 @@
             <div class="container d-flex justify-content-between align-items-center">
                 <div class="console-brand">量化控制台</div>
                 <nav class="console-nav">
-                    <a href="{{ url_for('index') }}" class="active">筛选</a>
-                    <a href="{{ url_for('cb_screener') }}">可转债筛选</a>
+                    <a href="{{ url_for('index') }}">筛选</a>
+                    <a href="{{ url_for('cb_screener') }}" class="active">可转债筛选</a>
                     <a href="{{ url_for('backtest_page') }}">回测</a>
                     <a href="{{ url_for('portfolio_page') }}">组合回测</a>
                     <a href="{{ url_for('fear_greed') }}">美股情绪</a>
@@ -30,14 +30,12 @@
         <div class="container py-4">
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <div>
-                    <div class="console-breadcrumb">股票筛选 / 控制台</div>
-                    <h2 class="fw-bold mb-0">智能股票筛选</h2>
+                    <div class="console-breadcrumb">可转债筛选 / 控制台</div>
+                    <h2 class="fw-bold mb-0">可转债筛选</h2>
                     <div class="muted">设置筛选规则，生成候选清单</div>
                 </div>
                 <div class="d-flex gap-2">
                     <a href="{{ url_for('backtest_page') }}" class="btn btn-outline-primary">策略回测</a>
-                    <a href="{{ url_for('fear_greed') }}" class="btn btn-outline-primary">美股情绪</a>
-                    <a href="{{ url_for('cn_fear') }}" class="btn btn-outline-primary">A股情绪</a>
                     <a href="{{ url_for('monitor_page') }}" class="btn btn-primary">实时监控</a>
                 </div>
             </div>
@@ -48,70 +46,96 @@
                     <span class="muted small">数据更新日: {{ today }}</span>
                 </div>
                 <div class="card-body">
-                    <form method="POST" action="/screener" id="screener-form">
+                    <form method="POST" action="/cb-screener" id="cb-screener-form">
                         <div class="row g-3">
                             <div class="col-md-4">
                                 <label class="form-label fw-bold">选择日期</label>
-                                <input type="text" class="form-control" name="filter_date" id="filter-date-input"
+                                <input type="text" class="form-control" name="filter_date" id="cb-filter-date"
                                        value="{{ default_date }}" required>
-                                <div class="form-text text-danger d-none" id="filter-date-error"></div>
+                                <div class="form-text text-danger d-none" id="cb-filter-date-error"></div>
                             </div>
-                            
+
                             <div class="col-md-4">
-                                <label class="form-label fw-bold">排序条件</label>
-                                <select class="form-select" name="sort_by">
-                                    <option value="market_cap_asc">市值(从小到大)</option>
-                                    <option value="market_cap_desc">市值(从大到小)</option>
-                                </select>
+                                <label class="form-label fw-bold">持仓数量</label>
+                                <input type="number" class="form-control" name="hold_num" min="1" max="200"
+                                       value="10" required>
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">调仓周期(天)</label>
+                                <input type="number" class="form-control" name="rebalance_period" min="1" max="50"
+                                       value="1" required>
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">调仓时点</label>
+                                <div class="border rounded p-3">
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="radio" name="rebalance_time"
+                                               id="cb-open" value="open">
+                                        <label class="form-check-label" for="cb-open">开盘价</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="rebalance_time"
+                                               id="cb-close" value="close" checked>
+                                        <label class="form-check-label" for="cb-close">收盘价</label>
+                                    </div>
+                                </div>
                             </div>
 
                             <div class="col-md-4">
                                 <label class="form-label fw-bold">筛选开关</label>
                                 <div class="border rounded p-3">
                                     <div class="form-check mb-2">
-                                        <input class="form-check-input" type="checkbox" value="true" name="exclude_st" id="exclude-st" checked>
-                                        <label class="form-check-label" for="exclude-st">排除ST/*ST股票</label>
+                                        <input class="form-check-input" type="checkbox" value="true" name="exclude_st"
+                                               id="cb-exclude-st" checked>
+                                        <label class="form-check-label" for="cb-exclude-st">排除ST/*ST标的</label>
                                     </div>
                                     <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" value="true" name="filter_pe_gt_zero" id="filter-pe" checked>
-                                        <label class="form-check-label" for="filter-pe">季度扣非PE>0 且扣除商誉PB>0</label>
+                                        <input class="form-check-input" type="checkbox" value="true"
+                                               name="filter_pe_gt_zero" id="cb-filter-pe" checked>
+                                        <label class="form-check-label" for="cb-filter-pe">季度扣非PE>0 且扣除商誉PB>0</label>
                                     </div>
                                 </div>
                             </div>
-                            
-                            <div class="col-md-8">
+
+                            <div class="col-md-4">
                                 <label class="form-label fw-bold">排除交易所</label>
                                 <div class="border rounded p-3">
                                     <div class="row g-2">
-                                        <div class="col-6 col-lg-3">
+                                        <div class="col-6">
                                             <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" value="main" name="exclude_exchanges" id="exclude-main">
-                                                <label class="form-check-label" for="exclude-main">主板</label>
+                                                <input class="form-check-input" type="checkbox" value="main"
+                                                       name="exclude_exchanges" id="cb-exclude-main">
+                                                <label class="form-check-label" for="cb-exclude-main">主板</label>
                                             </div>
                                         </div>
-                                        <div class="col-6 col-lg-3">
+                                        <div class="col-6">
                                             <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" value="kcb" name="exclude_exchanges" id="exclude-kcb" checked>
-                                                <label class="form-check-label" for="exclude-kcb">科创板</label>
+                                                <input class="form-check-input" type="checkbox" value="kcb"
+                                                       name="exclude_exchanges" id="cb-exclude-kcb" checked>
+                                                <label class="form-check-label" for="cb-exclude-kcb">科创板</label>
                                             </div>
                                         </div>
-                                        <div class="col-6 col-lg-3">
+                                        <div class="col-6">
                                             <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" value="cyb" name="exclude_exchanges" id="exclude-cyb" checked>
-                                                <label class="form-check-label" for="exclude-cyb">创业板</label>
+                                                <input class="form-check-input" type="checkbox" value="cyb"
+                                                       name="exclude_exchanges" id="cb-exclude-cyb" checked>
+                                                <label class="form-check-label" for="cb-exclude-cyb">创业板</label>
                                             </div>
                                         </div>
-                                        <div class="col-6 col-lg-3">
+                                        <div class="col-6">
                                             <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" value="bse" name="exclude_exchanges" id="exclude-bse" checked>
-                                                <label class="form-check-label" for="exclude-bse">北交所</label>
+                                                <input class="form-check-input" type="checkbox" value="bse"
+                                                       name="exclude_exchanges" id="cb-exclude-bse" checked>
+                                                <label class="form-check-label" for="cb-exclude-bse">北交所</label>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                        
+
                         <div class="mt-4 d-flex justify-content-end gap-2">
                             <button type="submit" class="btn btn-primary px-4">
                                 <i class="bi bi-search"></i> 开始筛选
@@ -122,19 +146,14 @@
             </div>
         </div>
     </div>
-    
+
     <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
     <script>
-        function downloadCsv() {
-            const query = new URLSearchParams(new FormData(document.getElementById('screener-form'))).toString();
-            window.location.href = '/screener/export?' + query;
-        }
-
         const validDates = {{ valid_dates_json | safe }};
         const validDateSet = new Set(validDates);
-        const dateInput = document.getElementById('filter-date-input');
-        const dateError = document.getElementById('filter-date-error');
-        const submitBtn = document.querySelector('#screener-form button[type="submit"]');
+        const dateInput = document.getElementById('cb-filter-date');
+        const dateError = document.getElementById('cb-filter-date-error');
+        const submitBtn = document.querySelector('#cb-screener-form button[type="submit"]');
 
         if (dateInput && window.flatpickr) {
             flatpickr(dateInput, {

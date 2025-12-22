@@ -70,6 +70,26 @@ class OptionVixService:
                 payloads.append(snapshot)
         return payloads
 
+    def get_term_structure_snapshots(self) -> List[Dict]:
+        if self.pro is None:
+            return []
+        today = datetime.date.today()
+        payloads = []
+        for symbol, meta in self.TARGETS.items():
+            try:
+                snapshot = self._build_term_structure(symbol, meta, today)
+            except Exception as exc:
+                Logger.error(f"build term structure failed for {symbol}: {exc}")
+                snapshot = {
+                    "symbol": symbol,
+                    "index_name": meta["name"],
+                    "index_code": meta["index_code"],
+                    "error": "计算失败",
+                }
+            if snapshot:
+                payloads.append(snapshot)
+        return payloads
+
     def _build_snapshot(self, symbol: str, meta: Dict, today: datetime.date) -> Dict:
         metadata = self._get_metadata(symbol, meta)
         base_payload = {
@@ -137,6 +157,60 @@ class OptionVixService:
             base_payload["error"] = "插值失败"
         else:
             base_payload["vix_value"] = round(vix_value, 2)
+        return base_payload
+
+    def _build_term_structure(self, symbol: str, meta: Dict, today: datetime.date) -> Dict:
+        metadata = self._get_metadata(symbol, meta)
+        base_payload = {
+            "symbol": symbol,
+            "index_name": meta["name"],
+            "index_code": meta["index_code"],
+            "option_family": meta["opt_code"],
+            "risk_free_rate": self.risk_free_rate,
+            "source": "Sina期权实时 · 平值期权隐含波动率",
+        }
+        if not metadata:
+            base_payload["error"] = "缺少期权合约元数据"
+            return base_payload
+
+        future_contracts = [row for row in metadata if row["maturity"] >= today]
+        if not future_contracts:
+            base_payload["error"] = "暂无可用合约"
+            return base_payload
+
+        grouped: Dict[datetime.date, List[Dict]] = {}
+        for row in future_contracts:
+            grouped.setdefault(row["maturity"], []).append(row)
+
+        ordered_terms = sorted(grouped.items(), key=lambda x: x[0])
+        structured_terms = []
+        for maturity, rows in ordered_terms:
+            days = max((maturity - today).days, 0)
+            if days <= 0:
+                continue
+            structured_terms.append((maturity, days, rows))
+
+        if not structured_terms:
+            base_payload["error"] = "找不到未来到期的合约"
+            return base_payload
+
+        codes = []
+        for _, _, rows in structured_terms:
+            codes.extend(row["ts_code_short"] for row in rows)
+        quotes = self._fetch_option_quotes(codes)
+
+        terms = []
+        for maturity, days, rows in structured_terms:
+            term = self._build_atm_term(rows, quotes, maturity, days)
+            if term:
+                terms.append(term)
+
+        if not terms:
+            base_payload["error"] = "缺少有效报价"
+            return base_payload
+
+        base_payload["terms"] = terms
+        base_payload["timestamp"] = max((term.get("timestamp") for term in terms if term.get("timestamp")), default=None)
         return base_payload
 
     def _build_leg(self, rows: Sequence[Dict], quotes: Dict[str, Dict], maturity: datetime.date, days: int) -> Optional[Dict]:
@@ -224,6 +298,82 @@ class OptionVixService:
             "timestamp": max((t for t in timestamps if t), default=None),
         }
 
+    def _build_atm_term(self, rows: Sequence[Dict], quotes: Dict[str, Dict], maturity: datetime.date, days: int) -> Optional[Dict]:
+        call_quotes: Dict[float, Dict] = {}
+        put_quotes: Dict[float, Dict] = {}
+        timestamps = []
+        spot_prices = []
+        for row in rows:
+            quote = quotes.get(row["ts_code_short"])
+            if not quote:
+                continue
+            price = self._mid_price(quote)
+            if price is None or price <= 0:
+                continue
+            strike = row["strike"]
+            entry = {
+                "price": price,
+                "bid": quote.get("bid"),
+                "ask": quote.get("ask"),
+            }
+            if quote.get("underlying") is not None:
+                spot_prices.append(quote["underlying"])
+            timestamps.append(quote.get("timestamp"))
+            if row["call_put"] == "C":
+                call_quotes[strike] = entry
+            else:
+                put_quotes[strike] = entry
+
+        if not call_quotes and not put_quotes:
+            return None
+        if not spot_prices:
+            return None
+
+        spot_prices = [x for x in spot_prices if x and x > 0]
+        if not spot_prices:
+            return None
+        spot = sorted(spot_prices)[len(spot_prices) // 2]
+
+        strikes = sorted(set(call_quotes.keys()) | set(put_quotes.keys()))
+        if not strikes:
+            return None
+        atm_strike = min(strikes, key=lambda k: abs(k - spot))
+
+        T = days / 365.0
+        call_iv = None
+        put_iv = None
+        if atm_strike in call_quotes:
+            call_iv = self._implied_volatility(
+                price=call_quotes[atm_strike]["price"],
+                spot=spot,
+                strike=atm_strike,
+                T=T,
+                is_call=True,
+            )
+        if atm_strike in put_quotes:
+            put_iv = self._implied_volatility(
+                price=put_quotes[atm_strike]["price"],
+                spot=spot,
+                strike=atm_strike,
+                T=T,
+                is_call=False,
+            )
+
+        iv_values = [v for v in (call_iv, put_iv) if v is not None]
+        if not iv_values:
+            return None
+        iv = sum(iv_values) / len(iv_values)
+        return {
+            "maturity": maturity.isoformat(),
+            "days_to_expiry": days,
+            "strike": atm_strike,
+            "spot_price": spot,
+            "call_iv": round(call_iv * 100, 2) if call_iv is not None else None,
+            "put_iv": round(put_iv * 100, 2) if put_iv is not None else None,
+            "iv": round(iv * 100, 2),
+            "timestamp": max((t for t in timestamps if t), default=None),
+        }
+
     def _combine_legs(self, legs: Sequence[Dict]) -> Optional[float]:
         if not legs:
             return None
@@ -268,6 +418,58 @@ class OptionVixService:
         strike = common[0]
         diff = calls[strike]["price"] - puts[strike]["price"]
         return strike + math.exp(self.risk_free_rate * T) * diff
+
+    def _implied_volatility(
+        self,
+        price: float,
+        spot: float,
+        strike: float,
+        T: float,
+        is_call: bool,
+        max_iter: int = 60,
+    ) -> Optional[float]:
+        if price <= 0 or spot <= 0 or strike <= 0 or T <= 0:
+            return None
+        intrinsic = max(spot - strike, 0) if is_call else max(strike - spot, 0)
+        if price < intrinsic:
+            return None
+
+        low = 1e-4
+        high = 5.0
+        price_high = self._bs_price(spot, strike, T, high, is_call)
+        if price_high is None:
+            return None
+        while price_high < price and high < 10.0:
+            high *= 2
+            price_high = self._bs_price(spot, strike, T, high, is_call)
+            if price_high is None:
+                return None
+
+        for _ in range(max_iter):
+            mid = (low + high) / 2
+            mid_price = self._bs_price(spot, strike, T, mid, is_call)
+            if mid_price is None:
+                return None
+            if abs(mid_price - price) < 1e-4:
+                return mid
+            if mid_price > price:
+                high = mid
+            else:
+                low = mid
+        return (low + high) / 2
+
+    def _bs_price(self, spot: float, strike: float, T: float, sigma: float, is_call: bool) -> Optional[float]:
+        if sigma <= 0 or T <= 0 or spot <= 0 or strike <= 0:
+            return None
+        sqrt_t = math.sqrt(T)
+        d1 = (math.log(spot / strike) + (self.risk_free_rate + 0.5 * sigma * sigma) * T) / (sigma * sqrt_t)
+        d2 = d1 - sigma * sqrt_t
+        if is_call:
+            return spot * self._norm_cdf(d1) - strike * math.exp(-self.risk_free_rate * T) * self._norm_cdf(d2)
+        return strike * math.exp(-self.risk_free_rate * T) * self._norm_cdf(-d2) - spot * self._norm_cdf(-d1)
+
+    def _norm_cdf(self, x: float) -> float:
+        return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
 
     def _mid_price(self, quote: Dict) -> Optional[float]:
         bid = quote.get("bid")

@@ -79,11 +79,18 @@ class AfterHoursService:
                 last_known = record
         history = self.store.get_history()
         latest = history[-1] if history else None
+        if latest and latest.get("margin_ratio") in (None, 0):
+            refreshed = self._refresh_margin_for_date(latest.get("trade_date"))
+            if refreshed:
+                history = self.store.get_history()
+                latest = history[-1] if history else None
+        three_month_max = self._calc_three_month_max_turnover(history)
         return {
             "target_trade_date": (latest or {}).get("trade_date", trade_date),
             "requested_trade_date": trade_date,
             "latest": latest,
             "history": history[-250:],
+            "three_month_max_turnover": three_month_max,
         }
 
     def _ensure_history(self, upto_date: str):
@@ -242,3 +249,60 @@ class AfterHoursService:
             is_open = False
         self._trade_day_cache[date_str] = is_open
         return is_open
+
+    def _calc_three_month_max_turnover(self, history: List[Dict]) -> Optional[Dict]:
+        if not history:
+            return None
+        latest = history[-1]
+        latest_date = latest.get("trade_date")
+        if not latest_date:
+            return None
+        try:
+            latest_dt = datetime.datetime.strptime(str(latest_date), "%Y%m%d").date()
+        except ValueError:
+            return None
+        start_dt = latest_dt - datetime.timedelta(days=90)
+        max_amount = None
+        max_date = None
+        for row in history:
+            trade_date = row.get("trade_date")
+            amount = row.get("turnover_amount")
+            if trade_date is None or amount is None:
+                continue
+            try:
+                trade_dt = datetime.datetime.strptime(str(trade_date), "%Y%m%d").date()
+            except ValueError:
+                continue
+            if trade_dt < start_dt:
+                continue
+            if max_amount is None or amount > max_amount:
+                max_amount = amount
+                max_date = trade_date
+        if max_amount is None:
+            return None
+        return {"trade_date": max_date, "turnover_amount": max_amount}
+
+    def _refresh_margin_for_date(self, trade_date: Optional[str]) -> bool:
+        if not trade_date:
+            return False
+        try:
+            margin = self.pro.margin(trade_date=trade_date, fields="exchange_id,rzmre")
+        except Exception as exc:
+            Logger.error(f"refresh margin failed for {trade_date}: {exc}")
+            return False
+        if margin is None or margin.empty or "rzmre" not in margin.columns:
+            return False
+        margin_buy = float(margin["rzmre"].dropna().sum())
+        history = self.store.get_history()
+        record = next((r for r in history if r.get("trade_date") == trade_date), None)
+        if not record:
+            return False
+        turnover = record.get("turnover_amount")
+        ratio = margin_buy / turnover if turnover else None
+        updated = dict(record)
+        updated["margin_buy_amount"] = margin_buy
+        updated["margin_ratio"] = ratio
+        updated.pop("margin_from", None)
+        updated.pop("margin_derived", None)
+        self.store.upsert(updated)
+        return True

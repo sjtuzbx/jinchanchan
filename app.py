@@ -456,6 +456,26 @@ def index():
                            default_date=default_date,
                            valid_dates_json=json.dumps(valid_dates, ensure_ascii=False))
 
+
+@app.route('/cb-screener')
+def cb_screener():
+    valid_dates = load_valid_trade_dates()
+    valid_set = set(valid_dates)
+    now = beijing_now()
+    base_date = now.date() if now.hour >= 18 else now.date() - datetime.timedelta(days=1)
+    default_date = base_date.isoformat()
+    if valid_set:
+        default_date = resolve_valid_date(default_date, valid_set)
+        today_display = valid_dates[-1]
+    else:
+        today_display = TODAY
+    return render_template(
+        'cb_index.html',
+        today=today_display,
+        default_date=default_date,
+        valid_dates_json=json.dumps(valid_dates, ensure_ascii=False),
+    )
+
 @app.route('/fear-greed')
 def fear_greed():
     try:
@@ -694,6 +714,57 @@ def run_screener():
                            filter_pe_gt_zero=filter_pe_gt_zero,
                            sort_by=sort_by,
                            exchange_data=exchange_data)
+
+
+@app.route('/cb-screener', methods=['POST'])
+def run_cb_screener():
+    filter_date = request.form['filter_date']
+    hold_num = int(request.form.get('hold_num', 10))
+    rebalance_period = int(request.form.get('rebalance_period', 1))
+    rebalance_time = request.form.get('rebalance_time', 'close')
+    exclude_exchanges = request.form.getlist('exclude_exchanges')
+    exclude_st = 'exclude_st' in request.form
+    filter_pe_gt_zero = 'filter_pe_gt_zero' in request.form
+
+    filter_conditions = {
+        "exclude_exchanges": exclude_exchanges,
+        "exclude_st": exclude_st,
+        "filter_pe_gt_zero": filter_pe_gt_zero,
+    }
+    backtest_params = {
+        "start_date": filter_date,
+        "end_date": filter_date,
+        "hold_stocks": hold_num,
+        "rebalance_period": rebalance_period,
+        "rebalance_time": rebalance_time,
+    }
+
+    error_msg = None
+    positions = []
+    try:
+        result = backtest_service.run(filter_conditions, backtest_params)
+        history = result.get("position_history") if isinstance(result, dict) else []
+        if history:
+            latest = history[-1]
+            positions = latest.get("positions", [])
+    except Exception as exc:
+        Logger.error(f"cb screener failed: {exc}")
+        Logger.error(traceback.format_exc())
+        error_msg = str(exc)
+
+    return render_template(
+        'cb_result.html',
+        positions=positions,
+        total_count=len(positions),
+        filter_date=filter_date,
+        hold_num=hold_num,
+        rebalance_period=rebalance_period,
+        rebalance_time=rebalance_time,
+        exclude_exchanges=exclude_exchanges,
+        exclude_st=exclude_st,
+        filter_pe_gt_zero=filter_pe_gt_zero,
+        error=error_msg,
+    )
 
 
 @app.route('/screener/export')

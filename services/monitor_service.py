@@ -46,6 +46,7 @@ class FuturesMonitorService:
         self.basis_history = basis_history
         self.pro = pro_client
         self._vix_cache = {"timestamp": 0, "data": []}
+        self._term_cache = {"timestamp": 0, "data": []}
         self.vix_service = OptionVixService(pro_client=pro_client, session=self.session)
 
     def get_monitor_payload(self) -> Dict:
@@ -101,6 +102,7 @@ class FuturesMonitorService:
             "generated_at": datetime.datetime.now().isoformat(),
             "items": items,
             "vix": self._get_vix_data(),
+            "option_term_structure": self._get_term_structure(),
         }
 
     def _build_contract_codes(self, today: datetime.date, symbol: str) -> List[str]:
@@ -273,6 +275,20 @@ class FuturesMonitorService:
             Logger.error(f"option VIX calc failed: {exc}")
             data = []
         self._vix_cache = {"timestamp": now, "data": data}
+        return data
+
+    def _get_term_structure(self) -> List[Dict]:
+        if self.pro is None or self.vix_service is None:
+            return []
+        now = time.time()
+        if self._term_cache["timestamp"] and now - self._term_cache["timestamp"] < 60:
+            return self._term_cache["data"]
+        try:
+            data = self.vix_service.get_term_structure_snapshots()
+        except Exception as exc:
+            Logger.error(f"option term structure failed: {exc}")
+            data = []
+        self._term_cache = {"timestamp": now, "data": data}
         return data
 
     def _value_at(self, fields: List[str], idx: int) -> Optional[str]:

@@ -17,6 +17,7 @@
                 <div class="console-brand">量化控制台</div>
                 <nav class="console-nav">
                     <a href="{{ url_for('index') }}">筛选</a>
+                    <a href="{{ url_for('cb_screener') }}">可转债筛选</a>
                     <a href="{{ url_for('backtest_page') }}">回测</a>
                     <a href="{{ url_for('portfolio_page') }}">组合回测</a>
                     <a href="{{ url_for('fear_greed') }}">美股情绪</a>
@@ -67,6 +68,20 @@
                             </div>
                             <div class="small text-muted mt-2">
                                 融资买入额：<span id="margin-amount">--</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12 col-lg-6">
+                    <div class="card border-0 shadow-sm h-100">
+                        <div class="card-body">
+                            <div class="text-uppercase small text-muted mb-2">三个月最高成交额</div>
+                            <div class="d-flex align-items-baseline gap-2">
+                                <div class="display-6 fw-bold" id="three-month-max-amount">--</div>
+                                <div class="text-muted">对应交易日</div>
+                            </div>
+                            <div class="small text-muted mt-2">
+                                日期：<span id="three-month-max-date">--</span>
                             </div>
                         </div>
                     </div>
@@ -145,9 +160,9 @@
 
         function formatBillions(value) {
             if (!value || isNaN(value)) return '—';
-            const billion = 1e9;
-            if (value >= billion) {
-                return `${(value / billion).toFixed(2)} 亿元`;
+            const trillion = 1e12;
+            if (value >= trillion) {
+                return `${(value / trillion).toFixed(2)} 万亿元`;
             }
             return `${(value / 1e8).toFixed(2)} 亿元`;
         }
@@ -160,6 +175,12 @@
             document.getElementById('total-mv').textContent = formatBillions(latest.total_market_value);
             document.getElementById('margin-amount').textContent = formatBillions(latest.margin_buy_amount);
             document.getElementById('latest-time').textContent = new Date().toLocaleString('zh-CN', { hour12: false });
+        }
+
+        function updateThreeMonthMax(entry) {
+            if (!entry) return;
+            document.getElementById('three-month-max-amount').textContent = formatBillions(entry.turnover_amount);
+            document.getElementById('three-month-max-date').textContent = entry.trade_date || '--';
         }
 
         function buildChart(ctxId, history, field, color) {
@@ -282,6 +303,9 @@
                 if (history.length) {
                     turnoverChart = buildChart('turnover-chart', history, 'turnover_ratio', 'rgba(13,110,253,1)');
                     marginChart = buildChart('margin-chart', history, 'margin_ratio', 'rgba(220,53,69,1)');
+                }
+                if (payload.three_month_max_turnover) {
+                    updateThreeMonthMax(payload.three_month_max_turnover);
                 }
                 if (payload.fedwatch) {
                     renderFedWatch(payload.fedwatch);

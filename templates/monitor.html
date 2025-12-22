@@ -15,6 +15,7 @@
                 <div class="console-brand">量化控制台</div>
                 <nav class="console-nav">
                     <a href="{{ url_for('index') }}">筛选</a>
+                    <a href="{{ url_for('cb_screener') }}">可转债筛选</a>
                     <a href="{{ url_for('backtest_page') }}">回测</a>
                     <a href="{{ url_for('portfolio_page') }}">组合回测</a>
                     <a href="{{ url_for('fear_greed') }}">美股情绪</a>
@@ -51,6 +52,26 @@
                 <div class="card-body">
                     <div id="vix-empty" class="text-center text-muted small py-2">VIX 数据加载中...</div>
                     <div class="row g-3" id="vix-container"></div>
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header d-flex flex-column flex-lg-row justify-content-between align-items-lg-center">
+                    <div>
+                        <div class="text-uppercase small text-muted">期限结构</div>
+                        <h5 class="mb-0">指数期权平值隐含波动率 · 近月到远月</h5>
+                    </div>
+                    <span class="text-muted small">仅使用当前平值期权报价计算</span>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-12 col-xl-5">
+                            <canvas id="term-structure-chart" height="220"></canvas>
+                        </div>
+                        <div class="col-12 col-xl-7">
+                            <div id="term-structure-container" class="row g-3"></div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -101,6 +122,7 @@
         const REFRESH_MS = 15000;
         let timerId = null;
         let vixHistoryChart = null;
+        let termChart = null;
         const VIX_COLOR_MAP = {
             IH: 'rgba(220,53,69,1)',
             IF: 'rgba(13,110,253,1)',
@@ -306,6 +328,106 @@
             });
         }
 
+        function renderTermStructure(items) {
+            const chart = document.getElementById('term-structure-chart');
+            const container = document.getElementById('term-structure-container');
+            if (!chart || !container) return;
+            if (!items || !items.length) {
+                container.innerHTML = '<div class="col-12 text-muted text-center">暂无期限结构数据</div>';
+                if (termChart) {
+                    termChart.destroy();
+                    termChart = null;
+                }
+                return;
+            }
+            container.innerHTML = items.map(item => {
+                const terms = item.terms || [];
+                const rows = terms.map(term => `
+                    <tr>
+                        <td>${term.maturity}</td>
+                        <td>${term.days_to_expiry}</td>
+                        <td>${formatNumber(term.strike, 2)}</td>
+                        <td>${formatNumber(term.spot_price, 2)}</td>
+                        <td>${formatPercent(term.call_iv, 2)}</td>
+                        <td>${formatPercent(term.put_iv, 2)}</td>
+                        <td>${formatPercent(term.iv, 2)}</td>
+                    </tr>
+                `).join('');
+                const emptyRow = '<tr><td colspan="7" class="text-center text-muted">暂无可用期限</td></tr>';
+                return `
+                    <div class="col-12">
+                        <div class="border rounded p-3 h-100">
+                            <div class="fw-semibold">${item.index_name} (${item.index_code})</div>
+                            <div class="small text-muted mb-2">${item.option_family || ''}</div>
+                            ${item.error ? `<div class="text-danger small mb-2">${item.error}</div>` : ''}
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover align-middle mb-0">
+                                    <thead class="small text-muted">
+                                        <tr>
+                                            <th>到期日</th>
+                                            <th>剩余天数</th>
+                                            <th>平值行权价</th>
+                                            <th>标的价</th>
+                                            <th>认购IV</th>
+                                            <th>认沽IV</th>
+                                            <th>均值IV</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${rows || emptyRow}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            const datasets = items.map(item => {
+                const color = VIX_COLOR_MAP[item.symbol] || 'rgba(108,117,125,1)';
+                const points = (item.terms || []).map(term => ({ x: term.days_to_expiry, y: term.iv }));
+                return {
+                    label: item.symbol,
+                    data: points,
+                    borderColor: color,
+                    backgroundColor: color.replace('1)', '0.1)'),
+                    showLine: true,
+                    spanGaps: true,
+                    pointRadius: 3,
+                    tension: 0.2,
+                };
+            });
+            if (termChart) {
+                termChart.destroy();
+            }
+            termChart = new Chart(chart.getContext('2d'), {
+                type: 'scatter',
+                data: { datasets },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: 'bottom' },
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => `${ctx.dataset.label}: ${formatPercent(ctx.parsed.y, 2)} @ ${ctx.parsed.x}天`
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'linear',
+                            title: { display: true, text: '到期天数' },
+                            ticks: { precision: 0 }
+                        },
+                        y: {
+                            title: { display: true, text: '隐含波动率(%)' },
+                            ticks: { callback: val => formatPercent(val, 1) }
+                        }
+                    }
+                }
+            });
+        }
+
         function renderMacro(items) {
             const container = document.getElementById('macro-container');
             if (!container) return;
@@ -350,6 +472,7 @@
                 renderItems(data);
                 renderVix(data.vix || []);
                 renderVixHistory(data.vix_history || {});
+                renderTermStructure(data.option_term_structure || []);
                 renderMacro(data.macro || []);
                 document.getElementById('last-update').textContent = new Date(data.generated_at).toLocaleString('zh-CN', { hour12: false });
             } catch (err) {

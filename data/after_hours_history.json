@@ -2900,5 +2900,13 @@
     "turnover_ratio": 0.014016539364591187,
     "margin_buy_amount": 0.0,
     "margin_ratio": 0.0
+  },
+  {
+    "trade_date": "20251219",
+    "total_market_value": 120056477435265.0,
+    "turnover_amount": 1748741853794.0002,
+    "turnover_ratio": 0.014565993365388634,
+    "margin_buy_amount": 176930545061.0,
+    "margin_ratio": 0.10117590808336781
   }
 ]
