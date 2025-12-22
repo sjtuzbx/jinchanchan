@@ -40,5 +40,25 @@
     },
     "name": "bse20",
     "updated_at": "2025-12-17T12:39:13.230784"
+  },
+  {
+    "filter": {
+      "exclude_exchanges": [
+        "main",
+        "kcb",
+        "cyb"
+      ],
+      "exclude_st": "true"
+    },
+    "params": {
+      "start_date": "2024-12-20",
+      "end_date": "2025-12-19",
+      "hold_stocks": "10",
+      "rebalance_period": "5",
+      "weight_method": "equal",
+      "rebalance_time": "close"
+    },
+    "name": "北交所微盘股",
+    "updated_at": "2025-12-20T11:55:08.164136"
   }
 ]

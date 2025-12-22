@@ -10,6 +10,7 @@ import random
 import functools
 import os
 import time
+from typing import List
 from flask import make_response, jsonify, Response
 from data import get_exchange_filter
 from backtest.screener import Screener
@@ -64,11 +65,47 @@ fedwatch_service = FedWatchService(
 )
 
 DEBUG_MODE = os.getenv("JC_DEBUG", "0") == "1"
+CALENDAR_CSV_PATH = Path("/home/zbx/python_utils/python_utils/calendar.csv")
+CALENDAR_DATE_CACHE = None
 
 
 def debug_print(*args, **kwargs):
     if DEBUG_MODE:
         print(*args, **kwargs)
+
+
+def load_valid_trade_dates() -> List[str]:
+    global CALENDAR_DATE_CACHE
+    if CALENDAR_DATE_CACHE is not None:
+        return CALENDAR_DATE_CACHE
+    dates: List[str] = []
+    try:
+        lines = CALENDAR_CSV_PATH.read_text(encoding="utf-8").splitlines()
+    except Exception:
+        CALENDAR_DATE_CACHE = []
+        return CALENDAR_DATE_CACHE
+    for line in lines:
+        raw = line.strip()
+        if len(raw) != 8 or not raw.isdigit():
+            continue
+        dates.append(f"{raw[:4]}-{raw[4:6]}-{raw[6:]}")
+    CALENDAR_DATE_CACHE = sorted(set(dates))
+    return CALENDAR_DATE_CACHE
+
+
+def resolve_valid_date(date_str: str, valid_set: set) -> str:
+    if date_str in valid_set:
+        return date_str
+    try:
+        cursor = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
+    except Exception:
+        return date_str
+    for _ in range(370):
+        cursor -= datetime.timedelta(days=1)
+        candidate = cursor.strftime("%Y-%m-%d")
+        if candidate in valid_set:
+            return candidate
+    return date_str
 
 FEAR_GREED_URL = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
 FEAR_GREED_HEADERS = {
@@ -404,9 +441,20 @@ def format_date(date_obj, fmt='%Y-%m-%d'):
 # @no_cache
 def index():
     # 渲染筛选条件表单页
+    valid_dates = load_valid_trade_dates()
+    valid_set = set(valid_dates)
+    now = beijing_now()
+    base_date = now.date() if now.hour >= 18 else now.date() - datetime.timedelta(days=1)
+    default_date = base_date.isoformat()
+    if valid_set:
+        default_date = resolve_valid_date(default_date, valid_set)
+        today_display = valid_dates[-1]
+    else:
+        today_display = TODAY
     return render_template('index.html', 
-                           today=TODAY,
-                           default_date=(datetime.date.today()).isoformat())
+                           today=today_display,
+                           default_date=default_date,
+                           valid_dates_json=json.dumps(valid_dates, ensure_ascii=False))
 
 @app.route('/fear-greed')
 def fear_greed():
