@@ -1,9 +1,12 @@
 import csv
 import datetime
 import io
+import json
+import re
 from typing import Dict, List, Optional
 
 import requests
+from bs4 import BeautifulSoup
 
 from logger import Logger
 from .constants import SINA_HEADERS
@@ -15,6 +18,7 @@ class MacroDataService:
     FRED_SERIES = {
         "VIXCLS": {"name": "美股 VIX 指数", "unit": "%", "multiplier": 1.0},
         "DGS30": {"name": "美国30年国债收益率", "unit": "%", "multiplier": 1.0},
+        "DFII10": {"name": "TIPS 10年实际利率", "unit": "%", "multiplier": 1.0},
         "WALCL": {"name": "美联储资产负债表", "unit": "亿美元", "multiplier": 0.01},
         "WTREGEN": {"name": "TGA 账户余额", "unit": "亿美元", "multiplier": 0.01},
         "RRPONTSYD": {"name": "美股隔夜逆回购余额", "unit": "亿美元", "multiplier": 0.01},
@@ -33,9 +37,12 @@ class MacroDataService:
         {"key": "JISILU_CB", "name": "可转债等权指数"},
         {"key": "BEIJING_ALL", "name": "北证全指"},
         {"key": "MICROCAP_INDEX", "name": "微盘股指数"},
+        {"key": "BB_CREDIT_IMPULSE_CN", "name": "中国-彭博信贷脉冲指数"},
     ]
 
     FRED_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id={series}"
+    SEP_CALENDAR_URL = "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm"
+    SEP_TABLE_PATTERN = re.compile(r"fomcprojtabl(\d{8})\.htm", re.IGNORECASE)
 
     def __init__(self):
         self.session = requests.Session()
@@ -45,13 +52,23 @@ class MacroDataService:
 
     def get_macro_snapshot(self) -> List[Dict]:
         now = datetime.datetime.utcnow().timestamp()
+        required_keys = {"DFII10", "SEP_REAL_RATE", "BB_CREDIT_IMPULSE_CN"}
         if self._cache_expire and now < self._cache_expire and self._cache:
-            return list(self._cache.values())
+            if required_keys.issubset(self._cache.keys()):
+                return list(self._cache.values())
 
         snapshot: Dict[str, Dict] = {}
         snapshot.update(self._fetch_fred_series())
         snapshot.update(self._fetch_index_series())
+        sep_real = self._fetch_sep_real_rate()
+        if sep_real:
+            snapshot[sep_real["key"]] = sep_real
+        credit_impulse = self._fetch_bloomberg_credit_impulse()
+        if credit_impulse:
+            snapshot[credit_impulse["key"]] = credit_impulse
         for item in self.PLACEHOLDER_SERIES:
+            if item["key"] in snapshot:
+                continue
             snapshot[item["key"]] = {
                 "key": item["key"],
                 "name": item["name"],
@@ -161,3 +178,145 @@ class MacroDataService:
                     "error": "解析失败",
                 }
         return results
+
+    def _fetch_sep_real_rate(self) -> Optional[Dict]:
+        sep_date = self._find_latest_sep_date()
+        if not sep_date:
+            return {
+                "key": "SEP_REAL_RATE",
+                "name": "政策实际利率(SEP年末- PCE)",
+                "error": "未找到SEP数据",
+                "source": "FOMC SEP",
+            }
+        url = f"https://www.federalreserve.gov/monetarypolicy/fomcprojtabl{sep_date}.htm"
+        try:
+            resp = self.session.get(url, timeout=10)
+            resp.raise_for_status()
+        except Exception as exc:
+            Logger.error(f"fetch SEP table failed: {exc}")
+            return {
+                "key": "SEP_REAL_RATE",
+                "name": "政策实际利率(SEP年末- PCE)",
+                "error": "SEP表格获取失败",
+                "source": "FOMC SEP",
+            }
+        fed_row = self._extract_sep_row(resp.text, "Federal funds rate")
+        pce_row = self._extract_sep_row(resp.text, "PCE inflation")
+        if not fed_row or not pce_row:
+            return {
+                "key": "SEP_REAL_RATE",
+                "name": "政策实际利率(SEP年末- PCE)",
+                "error": "SEP表格解析失败",
+                "source": "FOMC SEP",
+            }
+        fed_median = self._extract_first_number(fed_row[1:])
+        pce_median = self._extract_first_number(pce_row[1:])
+        if fed_median is None or pce_median is None:
+            return {
+                "key": "SEP_REAL_RATE",
+                "name": "政策实际利率(SEP年末- PCE)",
+                "error": "SEP数值缺失",
+                "source": "FOMC SEP",
+            }
+        return {
+            "key": "SEP_REAL_RATE",
+            "name": "政策实际利率(SEP年末- PCE)",
+            "value": fed_median - pce_median,
+            "unit": "%",
+            "updated_at": sep_date,
+            "source": "FOMC SEP",
+            "components": {
+                "fed_funds_median": fed_median,
+                "pce_median": pce_median,
+            },
+        }
+
+    def _find_latest_sep_date(self) -> Optional[str]:
+        try:
+            resp = self.session.get(self.SEP_CALENDAR_URL, timeout=10)
+            resp.raise_for_status()
+        except Exception as exc:
+            Logger.error(f"fetch SEP calendar failed: {exc}")
+            return None
+        matches = self.SEP_TABLE_PATTERN.findall(resp.text)
+        if not matches:
+            return None
+        return max(matches)
+
+    def _extract_sep_row(self, html: str, label: str) -> Optional[List[str]]:
+        soup = BeautifulSoup(html, "html.parser")
+        for row in soup.find_all("tr"):
+            cells = [cell.get_text(strip=True) for cell in row.find_all(["th", "td"])]
+            if not cells:
+                continue
+            if cells[0].lower().startswith(label.lower()):
+                return cells
+        return None
+
+    def _extract_first_number(self, cells: List[str]) -> Optional[float]:
+        for cell in cells:
+            raw = cell.replace(",", "").strip()
+            if re.fullmatch(r"-?\d+(\.\d+)?", raw):
+                return float(raw)
+        for cell in cells:
+            raw = cell.replace(",", "").strip()
+            match = re.search(r"-?\d+(?:\.\d+)?", raw)
+            if match:
+                try:
+                    return float(match.group(0))
+                except ValueError:
+                    continue
+        return None
+
+    def _fetch_bloomberg_credit_impulse(self) -> Optional[Dict]:
+        url = "https://r.jina.ai/http://sc.macromicro.me/charts/data/35559.csv"
+        try:
+            resp = self.session.get(url, timeout=10)
+            resp.raise_for_status()
+            payload = resp.text.strip()
+            if payload.startswith("Title:"):
+                payload = payload.split("Markdown Content:", 1)[-1].strip()
+            data = json.loads(payload)
+        except Exception as exc:
+            Logger.error(f"fetch credit impulse failed: {exc}")
+            return {
+                "key": "BB_CREDIT_IMPULSE_CN",
+                "name": "中国-彭博信贷脉冲指数",
+                "error": "数据获取失败",
+                "source": "MacroMicro",
+            }
+        if not isinstance(data, dict) or not data.get("success"):
+            msg = data.get("msg") if isinstance(data, dict) else None
+            return {
+                "key": "BB_CREDIT_IMPULSE_CN",
+                "name": "中国-彭博信贷脉冲指数",
+                "error": msg or "需要会员授权",
+                "source": "MacroMicro",
+            }
+        series = data.get("data") or []
+        if not series:
+            return {
+                "key": "BB_CREDIT_IMPULSE_CN",
+                "name": "中国-彭博信贷脉冲指数",
+                "error": "数据为空",
+                "source": "MacroMicro",
+            }
+        last_point = series[-1]
+        try:
+            date_str = str(last_point[0])
+            value = float(last_point[1])
+        except Exception:
+            return {
+                "key": "BB_CREDIT_IMPULSE_CN",
+                "name": "中国-彭博信贷脉冲指数",
+                "error": "数据解析失败",
+                "source": "MacroMicro",
+            }
+        return {
+            "key": "BB_CREDIT_IMPULSE_CN",
+            "name": "中国-彭博信贷脉冲指数",
+            "value": value,
+            "unit": "",
+            "updated_at": date_str,
+            "source": "MacroMicro",
+        }

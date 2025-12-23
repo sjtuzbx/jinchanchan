@@ -370,6 +370,53 @@ def persist_cn_sentiment(trade_date, main, subs):
             return
     df_new.to_csv(CN_HISTORY_CSV, mode='a', index=False, header=not CN_HISTORY_CSV.exists())
 
+def backfill_cn_sentiment_upto(target_date: str, lookback_days: int = 420):
+    if not target_date:
+        return
+    if "-" in str(target_date):
+        target_date = target_date.replace("-", "")
+    df = pd.read_csv(CN_HISTORY_CSV) if CN_HISTORY_CSV.exists() else pd.DataFrame()
+    existing_dates = set(df["trade_date"].astype(str)) if not df.empty else set()
+
+    if not existing_dates:
+        candidates = [target_date]
+    else:
+        try:
+            target_dt = datetime.datetime.strptime(target_date, "%Y%m%d").date()
+        except ValueError:
+            return
+        lookback_dt = target_dt - datetime.timedelta(days=lookback_days)
+        start_date = min(existing_dates)
+        if start_date:
+            try:
+                start_dt = datetime.datetime.strptime(start_date, "%Y%m%d").date()
+            except ValueError:
+                start_dt = lookback_dt
+        else:
+            start_dt = lookback_dt
+        start_dt = max(start_dt, lookback_dt)
+        try:
+            cal = pro.trade_cal(
+                exchange="SSE",
+                start_date=start_dt.strftime("%Y%m%d"),
+                end_date=target_date,
+                is_open="1",
+            )
+        except Exception as exc:
+            Logger.error(f"补全情绪交易日历失败: {exc}")
+            return
+        candidates = cal["cal_date"].astype(str).tolist() if cal is not None and not cal.empty else []
+
+    for d in sorted(set(candidates) - existing_dates):
+        try:
+            res = compute_cn_sentiment(d)
+            if res:
+                persist_cn_sentiment(res["trade_date"], res["main"], res["subs"])
+                Logger.info(f"补全缺失情绪数据: {d}")
+        except Exception as exc:
+            Logger.error(f"补全情绪数据失败: {d}, err={exc}")
+
+
 def load_cn_history(required_dates=None):
     """加载历史数据，必要时补齐必需日期"""
     required = set(MANDATORY_SENTIMENT_DATES)
@@ -533,6 +580,13 @@ def cn_fear():
     trade_date = request.args.get("trade_date")
     if trade_date and "-" in trade_date:
         trade_date = trade_date.replace("-", "")
+    if trade_date:
+        backfill_target = trade_date
+    else:
+        now_bj = beijing_now()
+        base_date = now_bj.date() if now_bj.hour >= 17 else now_bj.date() - datetime.timedelta(days=1)
+        backfill_target = ensure_trade_date(base_date)
+    backfill_cn_sentiment_upto(backfill_target)
     try:
         page = int(request.args.get("page", 1))
         page = max(page, 1)

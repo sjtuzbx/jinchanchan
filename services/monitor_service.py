@@ -83,7 +83,15 @@ class FuturesMonitorService:
                     spot_price=spot_price,
                     today=today,
                 )
+                if quote.days_to_expiry <= 0:
+                    continue
                 contract_rows.append(quote)
+
+            serialized = [self._serialize_contract(symbol, row) for row in contract_rows]
+            front = min(serialized, key=lambda c: c.get("days_to_expiry", 9999), default=None)
+            roll_warning = None
+            if front and front.get("days_to_expiry") is not None and front.get("days_to_expiry") <= 3:
+                roll_warning = f"近月合约 {front.get('code')} 还有 {front.get('days_to_expiry')} 天交割"
 
             items.append(
                 {
@@ -94,7 +102,9 @@ class FuturesMonitorService:
                     "spot_change_pct": spot_info.get("change_pct"),
                     "index_code": self.SYMBOL_META[symbol]["index"],
                     "spot_detail": spot_info,
-                    "contracts": [self._serialize_contract(symbol, row) for row in contract_rows],
+                    "contracts": serialized,
+                    "front_contract": front,
+                    "roll_warning": roll_warning,
                 }
             )
 
@@ -108,6 +118,8 @@ class FuturesMonitorService:
     def _build_contract_codes(self, today: datetime.date, symbol: str) -> List[str]:
         """Return front month, next month, and next two quarter contracts."""
         year, month = today.year, today.month
+        if self._month_expiry(year, month) < today:
+            year, month = self._shift_month(year, month, 1)
         months = [
             (year, month),
             self._shift_month(year, month, 1),
@@ -125,6 +137,13 @@ class FuturesMonitorService:
             seen.add(key)
             codes.append(f"{symbol}{y % 100:02d}{m:02d}")
         return codes
+
+    def _month_expiry(self, year: int, month: int) -> datetime.date:
+        first_day = datetime.date(year, month, 1)
+        days_to_friday = (4 - first_day.weekday()) % 7
+        first_friday = first_day + datetime.timedelta(days=days_to_friday)
+        third_friday = first_friday + datetime.timedelta(days=14)
+        return third_friday
 
     def _shift_month(self, year: int, month: int, delta: int) -> (int, int):
         total = year * 12 + month - 1 + delta
@@ -237,11 +256,7 @@ class FuturesMonitorService:
     def _contract_expiry(self, contract: str) -> datetime.date:
         year = 2000 + int(contract[2:4])
         month = int(contract[4:6])
-        first_day = datetime.date(year, month, 1)
-        days_to_friday = (4 - first_day.weekday()) % 7
-        first_friday = first_day + datetime.timedelta(days=days_to_friday)
-        third_friday = first_friday + datetime.timedelta(days=14)
-        return third_friday
+        return self._month_expiry(year, month)
 
     def _serialize_contract(self, symbol: str, quote: ContractQuote) -> Dict:
         data = {
