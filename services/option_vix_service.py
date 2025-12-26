@@ -198,10 +198,11 @@ class OptionVixService:
         for _, _, rows in structured_terms:
             codes.extend(row["ts_code_short"] for row in rows)
         quotes = self._fetch_option_quotes(codes)
+        underlying_spot = self._get_underlying_price(meta)
 
         terms = []
         for maturity, days, rows in structured_terms:
-            term = self._build_atm_term(rows, quotes, maturity, days)
+            term = self._build_atm_term(rows, quotes, maturity, days, underlying_spot=underlying_spot)
             if term:
                 terms.append(term)
 
@@ -298,11 +299,17 @@ class OptionVixService:
             "timestamp": max((t for t in timestamps if t), default=None),
         }
 
-    def _build_atm_term(self, rows: Sequence[Dict], quotes: Dict[str, Dict], maturity: datetime.date, days: int) -> Optional[Dict]:
+    def _build_atm_term(
+        self,
+        rows: Sequence[Dict],
+        quotes: Dict[str, Dict],
+        maturity: datetime.date,
+        days: int,
+        underlying_spot: Optional[float] = None,
+    ) -> Optional[Dict]:
         call_quotes: Dict[float, Dict] = {}
         put_quotes: Dict[float, Dict] = {}
         timestamps = []
-        spot_prices = []
         for row in rows:
             quote = quotes.get(row["ts_code_short"])
             if not quote:
@@ -316,8 +323,6 @@ class OptionVixService:
                 "bid": quote.get("bid"),
                 "ask": quote.get("ask"),
             }
-            if quote.get("underlying") is not None:
-                spot_prices.append(quote["underlying"])
             timestamps.append(quote.get("timestamp"))
             if row["call_put"] == "C":
                 call_quotes[strike] = entry
@@ -326,13 +331,9 @@ class OptionVixService:
 
         if not call_quotes and not put_quotes:
             return None
-        if not spot_prices:
+        spot = underlying_spot
+        if spot is None:
             return None
-
-        spot_prices = [x for x in spot_prices if x and x > 0]
-        if not spot_prices:
-            return None
-        spot = sorted(spot_prices)[len(spot_prices) // 2]
 
         strikes = sorted(set(call_quotes.keys()) | set(put_quotes.keys()))
         if not strikes:
@@ -499,10 +500,30 @@ class OptionVixService:
                 result[code] = {
                     "bid": self._safe_float(self._value_at(fields, 22)),
                     "ask": self._safe_float(self._value_at(fields, 12)),
-                    "underlying": self._safe_float(self._value_at(fields, 7)),
                     "timestamp": self._value_at(fields, 32),
                 }
         return result
+
+    def _get_underlying_price(self, meta: Dict) -> Optional[float]:
+        opt_code = meta.get("opt_code") or ""
+        if "OP" not in opt_code:
+            return None
+        base = opt_code.replace("OP", "").split(".")[0]
+        if not base:
+            return None
+        code = f"sh{base}"
+        try:
+            resp = self.session.get(f"https://hq.sinajs.cn/list={code}", timeout=5)
+            resp.raise_for_status()
+        except Exception:
+            return None
+        text = resp.text.strip()
+        match = re.match(r"var\s+hq_str_(\w+)=\"(.*)\";", text)
+        if not match:
+            return None
+        payload = match.groups()[1].split(",")
+        spot = self._safe_float(self._value_at(payload, 3))
+        return spot
 
     def _get_metadata(self, symbol: str, meta: Dict) -> List[Dict]:
         cached = self._meta_cache.get(symbol)

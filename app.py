@@ -33,6 +33,7 @@ from services.vix_history import VixHistoryStore
 from services.afterhours_service import AfterHoursService
 from services.macro_service import MacroDataService
 from services.fedwatch_service import FedWatchService
+from services.vix_intraday import VixIntradayStore
 
 import tushare as ts
 try:
@@ -56,6 +57,7 @@ basis_history = BasisHistory(pro, Path(__file__).resolve().parent / "data" / "fu
 basis_history.ensure_latest()
 monitor_service = FuturesMonitorService(basis_history=basis_history, pro_client=pro)
 vix_history_store = VixHistoryStore(Path(__file__).resolve().parent / "data" / "vix_history.json")
+vix_intraday_store = VixIntradayStore(Path(__file__).resolve().parent / "data" / "vix_intraday.json", interval_minutes=5)
 after_hours_service = AfterHoursService(pro, Path(__file__).resolve().parent / "data" / "after_hours_history.json")
 macro_service = MacroDataService()
 fedwatch_service = FedWatchService(
@@ -554,7 +556,9 @@ def monitor_data():
         payload = monitor_service.get_monitor_payload()
         trade_date = resolve_trade_date_for_cutoff(15)
         vix_history_store.record(trade_date, payload.get("vix", []))
+        vix_intraday_store.record(payload.get("vix", []))
         payload["vix_history"] = vix_history_store.get_history()
+        payload["vix_intraday"] = vix_intraday_store.get_kline()
         payload["macro"] = macro_service.get_macro_snapshot()
         return jsonify(convert_numpy_types(payload))
     except Exception as exc:

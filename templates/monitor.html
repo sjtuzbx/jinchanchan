@@ -56,6 +56,22 @@
             </div>
 
             <div class="card mb-4">
+                <div class="card-header d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-2">
+                    <div>
+                        <div class="text-uppercase small text-muted">日内</div>
+                        <h5 class="mb-0">实时波动率走势</h5>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <select id="vix-intraday-symbol" class="form-select form-select-sm" style="width: auto;"></select>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="vix-intraday-empty" class="text-center text-muted small py-2">暂无日内波动率数据</div>
+                    <canvas id="vix-intraday-chart" height="160"></canvas>
+                </div>
+            </div>
+
+            <div class="card mb-4">
                 <div class="card-header d-flex flex-column flex-lg-row justify-content-between align-items-lg-center">
                     <div>
                         <div class="text-uppercase small text-muted">期限结构</div>
@@ -123,6 +139,8 @@
         let timerId = null;
         let vixHistoryChart = null;
         let termChart = null;
+        let vixIntradayChart = null;
+        let lastIntradayData = null;
         const VIX_COLOR_MAP = {
             IH: 'rgba(220,53,69,1)',
             IF: 'rgba(13,110,253,1)',
@@ -332,6 +350,103 @@
             });
         }
 
+        function renderVixIntraday(intraday) {
+            const select = document.getElementById('vix-intraday-symbol');
+            const empty = document.getElementById('vix-intraday-empty');
+            const canvas = document.getElementById('vix-intraday-chart');
+            if (!select || !canvas) return;
+            if (!vixIntradayChart && window.Chart && Chart.getChart) {
+                vixIntradayChart = Chart.getChart(canvas) || null;
+            }
+            lastIntradayData = intraday || null;
+            const series = (intraday && intraday.series) ? intraday.series : {};
+            const symbols = Object.keys(series || {}).sort();
+            if (!symbols.length) {
+                if (empty) empty.textContent = '暂无日内波动率数据';
+                if (vixIntradayChart) {
+                    vixIntradayChart.destroy();
+                    vixIntradayChart = null;
+                }
+                select.innerHTML = '';
+                return;
+            }
+            const currentValue = select.value;
+            if (!currentValue || !symbols.includes(currentValue)) {
+                select.innerHTML = symbols.map(symbol => `<option value="${symbol}">${symbol}</option>`).join('');
+                select.value = symbols[0];
+            } else if (select.options.length !== symbols.length) {
+                select.innerHTML = symbols.map(symbol => `<option value="${symbol}">${symbol}</option>`).join('');
+                select.value = currentValue;
+            }
+            const selected = select.value;
+            const rows = (series[selected] || []).filter(item => item && item.v !== null && item.t);
+            if (!rows.length) {
+                if (empty) empty.textContent = '暂无日内波动率数据';
+                if (vixIntradayChart) {
+                    vixIntradayChart.destroy();
+                    vixIntradayChart = null;
+                }
+                return;
+            }
+            if (empty) empty.textContent = '';
+            const labels = rows.map(item => item.t);
+            const data = rows.map(item => item.v);
+            const color = VIX_COLOR_MAP[selected] || 'rgba(108,117,125,1)';
+            if (vixIntradayChart) {
+                vixIntradayChart.data.labels = labels;
+                vixIntradayChart.data.datasets[0].label = selected;
+                vixIntradayChart.data.datasets[0].data = data;
+                vixIntradayChart.data.datasets[0].borderColor = color;
+                vixIntradayChart.data.datasets[0].color = color;
+                vixIntradayChart.data.datasets[0].backgroundColor = color.replace('1)', '0.1)');
+                vixIntradayChart.update();
+                return;
+            }
+            if (window.Chart && Chart.getChart) {
+                const existing = Chart.getChart(canvas);
+                if (existing) {
+                    existing.destroy();
+                }
+            }
+            vixIntradayChart = new Chart(canvas.getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: selected,
+                        data,
+                        borderColor: color,
+                        backgroundColor: color.replace('1)', '0.1)'),
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        tension: 0.2,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => {
+                                    return `${ctx.dataset.label}: ${formatPercent(ctx.parsed.y, 2)}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'category',
+                            ticks: { maxTicksLimit: 8 }
+                        },
+                        y: {
+                            ticks: { callback: val => formatPercent(val, 1) }
+                        }
+                    }
+                }
+            });
+        }
+
         function renderTermStructure(items) {
             const chart = document.getElementById('term-structure-chart');
             const container = document.getElementById('term-structure-container');
@@ -476,6 +591,7 @@
                 renderItems(data);
                 renderVix(data.vix || []);
                 renderVixHistory(data.vix_history || {});
+                renderVixIntraday(data.vix_intraday || {});
                 renderTermStructure(data.option_term_structure || []);
                 renderMacro(data.macro || []);
                 document.getElementById('last-update').textContent = new Date(data.generated_at).toLocaleString('zh-CN', { hour12: false });
@@ -501,6 +617,13 @@
                 timerId = setInterval(fetchMonitorData, REFRESH_MS);
             }
         });
+
+        const vixSymbolSelect = document.getElementById('vix-intraday-symbol');
+        if (vixSymbolSelect) {
+            vixSymbolSelect.addEventListener('change', () => {
+                renderVixIntraday(lastIntradayData || {});
+            });
+        }
 
         initPolling();
     </script>
