@@ -57,3 +57,9 @@ Tests
 
 python - <<'PY' from app import basis_history; print('done load', bool(basis_history.data)); ... PY
 python - <<'PY' from app import monitor_service; payload = monitor_service.get_monitor_payload(); ... PY
+
+
+## 20251226
+实时监控新增日内波动率走势：后端在 services/vix_intraday.py 持久化每次刷新得到的 VIX 快照，/monitor/data 返回 vix_intraday；前端 templates/monitor.html 增加“实时波动率走势”折线图并可切换 IH/IF/IC/IM。
+日内走势只在交易时段采样：9:30-11:30、13:00-15:00 之外不写入数据点。
+修复期权期限结构的 IV 计算：services/option_vix_service.py 改为从对应 ETF 实时行情获取标的价（510050/510300/510500/588000），不再误用期权字段作为标的价，避免 call/put IV 失真。
