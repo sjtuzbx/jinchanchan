@@ -850,11 +850,18 @@ def backtest_page():
     # 历史数据的最早日期 (假设有2年历史数据)
     min_history_date = (datetime.date.today() - timedelta(days=365)).isoformat()
     end_date = (datetime.date.today() - timedelta(days=1)).isoformat()
-    
-    return render_template('backtest.html', 
-                           start_date=min_history_date,
-                           end_date=end_date,
-                           min_history_date=min_history_date[:10])
+    valid_dates = load_valid_trade_dates()
+    valid_set = set(valid_dates)
+    if valid_set:
+        min_history_date = resolve_valid_date(min_history_date, valid_set)
+        end_date = resolve_valid_date(end_date, valid_set)
+    return render_template(
+        'backtest.html',
+        start_date=min_history_date,
+        end_date=end_date,
+        min_history_date=min_history_date[:10],
+        valid_dates_json=json.dumps(valid_dates, ensure_ascii=False),
+    )
 
 @app.route('/backtest', methods=['POST'])
 def run_backtest():
