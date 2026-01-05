@@ -33,7 +33,7 @@
             },
             "trade_strategy": {
                 "start_time": "20070101",
-                "end_time": "20251231",
+                "end_time": "20261231",
                 "holding_period": 5,
                 "rebalancing_week": 0,
                 "rebalancing_point": "close",
