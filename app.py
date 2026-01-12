@@ -117,6 +117,7 @@ FEAR_GREED_HEADERS = {
 }
 CN_HISTORY_CSV = Path(__file__).resolve().parent / "data" / "cn_sentiment_history.csv"
 MANDATORY_SENTIMENT_DATES = {"20251210", "20251216"}
+CN_SENTIMENT_START_DATE = "20180101"
 
 app = Flask(__name__)
 
@@ -381,22 +382,35 @@ def backfill_cn_sentiment_upto(target_date: str, lookback_days: int = 420):
     existing_dates = set(df["trade_date"].astype(str)) if not df.empty else set()
 
     if not existing_dates:
-        candidates = [target_date]
+        try:
+            start_dt = datetime.datetime.strptime(CN_SENTIMENT_START_DATE, "%Y%m%d").date()
+        except ValueError:
+            start_dt = None
+        if start_dt is None:
+            candidates = [target_date]
+        else:
+            try:
+                cal = pro.trade_cal(
+                    exchange="SSE",
+                    start_date=start_dt.strftime("%Y%m%d"),
+                    end_date=target_date,
+                    is_open="1",
+                )
+            except Exception as exc:
+                Logger.error(f"补全情绪交易日历失败: {exc}")
+                return
+            candidates = cal["cal_date"].astype(str).tolist() if cal is not None and not cal.empty else []
     else:
         try:
             target_dt = datetime.datetime.strptime(target_date, "%Y%m%d").date()
         except ValueError:
             return
-        lookback_dt = target_dt - datetime.timedelta(days=lookback_days)
-        start_date = min(existing_dates)
-        if start_date:
-            try:
-                start_dt = datetime.datetime.strptime(start_date, "%Y%m%d").date()
-            except ValueError:
-                start_dt = lookback_dt
-        else:
-            start_dt = lookback_dt
-        start_dt = max(start_dt, lookback_dt)
+        try:
+            start_dt = datetime.datetime.strptime(CN_SENTIMENT_START_DATE, "%Y%m%d").date()
+        except ValueError:
+            start_dt = target_dt
+        if target_dt < start_dt:
+            start_dt = target_dt
         try:
             cal = pro.trade_cal(
                 exchange="SSE",
@@ -540,7 +554,7 @@ def fear_greed():
     return render_template(
         'fear_greed.html',
         main=main,
-        history=history_points[:120],
+        history=history_points[-120:],
         sub_indicators=sub_list,
         extras=extras,
         error=error
@@ -757,14 +771,22 @@ def run_screener():
     exclude_st = 'exclude_st' in request.form
     filter_pe_gt_zero = 'filter_pe_gt_zero' in request.form
     sort_by = request.form.get('sort_by', 'market_cap_asc')
+    try:
+        output_limit = int(request.form.get('output_limit', 25))
+    except (TypeError, ValueError):
+        output_limit = 25
+    output_limit = max(1, min(output_limit, 200))
 
     res, error_msg, exchange_data = execute_screen_logic(
         filter_date, exclude_exchanges, exclude_st, filter_pe_gt_zero, sort_by
     )
+    display_count = min(output_limit, len(res))
 
     return render_template('result.html',
-                           stocks=res[:20],
+                           stocks=res[:output_limit],
                            total_count=len(res),
+                           display_count=display_count,
+                           output_limit=output_limit,
                            error=error_msg,
                            filter_date=filter_date,
                            exclude_exchanges=exclude_exchanges,
@@ -832,8 +854,14 @@ def export_screener():
     exclude_st = 'exclude_st' in request.args
     filter_pe_gt_zero = 'filter_pe_gt_zero' in request.args
     sort_by = request.args.get('sort_by', 'market_cap_asc')
+    try:
+        output_limit = int(request.args.get('output_limit', 25))
+    except (TypeError, ValueError):
+        output_limit = 25
+    output_limit = max(1, min(output_limit, 200))
 
     res, _, _ = execute_screen_logic(filter_date, exclude_exchanges, exclude_st, filter_pe_gt_zero, sort_by)
+    res = res[:output_limit]
     lines = ["代码,名字"] + [f"{item['id']},{item['name']}" for item in res]
     csv_data = "\n".join(lines)
     filename = f"screener_{filter_date}.csv"
