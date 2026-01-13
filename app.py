@@ -116,6 +116,7 @@ FEAR_GREED_HEADERS = {
     "Referer": "https://www.cnn.com/markets/fear-and-greed"
 }
 CN_HISTORY_CSV = Path(__file__).resolve().parent / "data" / "cn_sentiment_history.csv"
+CN_BSE_HISTORY_CSV = Path(__file__).resolve().parent / "data" / "cn_sentiment_bse_history.csv"
 MANDATORY_SENTIMENT_DATES = {"20251210", "20251216"}
 CN_SENTIMENT_START_DATE = "20180101"
 
@@ -252,7 +253,26 @@ def scale_0_100(value, low, high):
     clipped = max(min(value, high), low)
     return (clipped - low) / (high - low) * 100
 
-def compute_cn_sentiment(trade_date=None):
+def get_cn_sentiment_label_map(market="cn"):
+    if market == "bse":
+        return {
+            "momentum": "市场动量(北证50/125日均)",
+            "breadth": "价格广度(上涨家数占比)",
+            "strength": "价格强度(涨停-跌停占比)",
+            "volatility": "波动率(反向)",
+            "avgret": "平均涨跌幅",
+            "pcr": None,
+        }
+    return {
+        "momentum": "市场动量(沪深300/125日均)",
+        "breadth": "价格广度(上涨家数占比)",
+        "strength": "价格强度(涨停-跌停占比)",
+        "volatility": "波动率(反向)",
+        "avgret": "平均涨跌幅",
+        "pcr": "沪深300期权PCR(IO)",
+    }
+
+def compute_cn_sentiment(trade_date=None, market="cn"):
     """基于A股行情，按CNN Fear & Greed思路的简化版：
     - 市场动量：沪深300收盘/125日均线
     - 价格广度：上涨家数占比
@@ -272,6 +292,11 @@ def compute_cn_sentiment(trade_date=None):
     if df is None or df.empty:
         return None
 
+    if market == "bse":
+        df = df[df["ts_code"].astype(str).str.endswith(".BJ")]
+        if df.empty:
+            return None
+
     total = len(df)
     if total == 0:
         return None
@@ -284,7 +309,8 @@ def compute_cn_sentiment(trade_date=None):
 
     # 指数动量 & 波动率（沪深300）
     start_hist = (datetime.datetime.strptime(trade_date, "%Y%m%d") - datetime.timedelta(days=220)).strftime("%Y%m%d")
-    idx_df = pro.index_daily(ts_code="000300.SH", start_date=start_hist, end_date=trade_date)
+    idx_code = "899050.BJ" if market == "bse" else "000300.SH"
+    idx_df = pro.index_daily(ts_code=idx_code, start_date=start_hist, end_date=trade_date)
     idx_df = idx_df.sort_values("trade_date")
     if idx_df.empty:
         return None
@@ -296,28 +322,30 @@ def compute_cn_sentiment(trade_date=None):
 
     # 看涨看跌比（沪深300期权 IO，按成交量）
     pcr_val = None
-    try:
-        opt_df = pro.opt_daily(trade_date=trade_date, fields="ts_code,trade_date,call_put,vol")
-        if opt_df is not None and not opt_df.empty:
-            io_df = opt_df[opt_df["ts_code"].str.startswith("IO")]
-            if not io_df.empty:
-                call_vol = io_df[io_df["call_put"] == "C"]["vol"].sum()
-                put_vol = io_df[io_df["call_put"] == "P"]["vol"].sum()
-                if call_vol and put_vol:
-                    pcr_val = put_vol / call_vol
-    except Exception as e:
-        Logger.error(f"compute pcr failed: {e}")
+    if market != "bse":
+        try:
+            opt_df = pro.opt_daily(trade_date=trade_date, fields="ts_code,trade_date,call_put,vol")
+            if opt_df is not None and not opt_df.empty:
+                io_df = opt_df[opt_df["ts_code"].str.startswith("IO")]
+                if not io_df.empty:
+                    call_vol = io_df[io_df["call_put"] == "C"]["vol"].sum()
+                    put_vol = io_df[io_df["call_put"] == "P"]["vol"].sum()
+                    if call_vol and put_vol:
+                        pcr_val = put_vol / call_vol
+        except Exception as e:
+            Logger.error(f"compute pcr failed: {e}")
 
+    labels = get_cn_sentiment_label_map(market)
     sub_indicators = [
-        {"label": "市场动量(沪深300/125日均)", "value": momentum_val, "score": scale_0_100(momentum_val, -0.05, 0.05)},
-        {"label": "价格广度(上涨家数占比)", "value": adv_ratio, "score": scale_0_100(adv_ratio, 0.2, 0.8)},
-        {"label": "价格强度(涨停-跌停占比)", "value": limit_up - limit_down, "score": scale_0_100(limit_up - limit_down, -0.05, 0.05)},
-        {"label": "波动率(反向)", "value": vol20, "score": 100 - scale_0_100(vol20, 0.08, 0.35)},
-        {"label": "平均涨跌幅", "value": avg_pct, "score": scale_0_100(avg_pct, -2.0, 2.0)},
+        {"label": labels["momentum"], "value": momentum_val, "score": scale_0_100(momentum_val, -0.05, 0.05)},
+        {"label": labels["breadth"], "value": adv_ratio, "score": scale_0_100(adv_ratio, 0.2, 0.8)},
+        {"label": labels["strength"], "value": limit_up - limit_down, "score": scale_0_100(limit_up - limit_down, -0.05, 0.05)},
+        {"label": labels["volatility"], "value": vol20, "score": 100 - scale_0_100(vol20, 0.08, 0.35)},
+        {"label": labels["avgret"], "value": avg_pct, "score": scale_0_100(avg_pct, -2.0, 2.0)},
     ]
-    if pcr_val is not None:
+    if pcr_val is not None and labels.get("pcr"):
         sub_indicators.append({
-            "label": "沪深300期权PCR(IO)",
+            "label": labels["pcr"],
             "value": pcr_val,
             "score": 100 - scale_0_100(pcr_val, 0.7, 1.3)
         })
@@ -344,9 +372,9 @@ def compute_cn_sentiment(trade_date=None):
         "subs": sub_indicators
     }
 
-def persist_cn_sentiment(trade_date, main, subs):
+def persist_cn_sentiment(trade_date, main, subs, history_csv=CN_HISTORY_CSV):
     """将当日情绪指标追加到CSV"""
-    CN_HISTORY_CSV.parent.mkdir(parents=True, exist_ok=True)
+    history_csv.parent.mkdir(parents=True, exist_ok=True)
     row = {
         "trade_date": trade_date,
         "score": main.get("score"),
@@ -357,6 +385,7 @@ def persist_cn_sentiment(trade_date, main, subs):
         # 简化列名
         col = {
             "市场动量(沪深300/125日均)": "momentum",
+            "市场动量(北证50/125日均)": "momentum",
             "价格广度(上涨家数占比)": "breadth",
             "价格强度(涨停-跌停占比)": "strength",
             "波动率(反向)": "volatility",
@@ -366,19 +395,25 @@ def persist_cn_sentiment(trade_date, main, subs):
         row[f"{col}_val"] = item.get("value")
         row[f"{col}_score"] = item.get("score")
     df_new = pd.DataFrame([row])
-    if CN_HISTORY_CSV.exists():
+    if history_csv.exists():
         # 若已存在当日记录则不重复写入
-        df_old = pd.read_csv(CN_HISTORY_CSV)
+        df_old = pd.read_csv(history_csv)
         if str(trade_date) in df_old["trade_date"].astype(str).values:
             return
-    df_new.to_csv(CN_HISTORY_CSV, mode='a', index=False, header=not CN_HISTORY_CSV.exists())
+    df_new.to_csv(history_csv, mode='a', index=False, header=not history_csv.exists())
 
-def backfill_cn_sentiment_upto(target_date: str, lookback_days: int = 420):
+def backfill_cn_sentiment_upto(
+    target_date: str,
+    lookback_days: int = 420,
+    market="cn",
+    history_csv=CN_HISTORY_CSV,
+    mandatory_dates=None,
+):
     if not target_date:
         return
     if "-" in str(target_date):
         target_date = target_date.replace("-", "")
-    df = pd.read_csv(CN_HISTORY_CSV) if CN_HISTORY_CSV.exists() else pd.DataFrame()
+    df = pd.read_csv(history_csv) if history_csv.exists() else pd.DataFrame()
     existing_dates = set(df["trade_date"].astype(str)) if not df.empty else set()
 
     if not existing_dates:
@@ -425,34 +460,49 @@ def backfill_cn_sentiment_upto(target_date: str, lookback_days: int = 420):
 
     for d in sorted(set(candidates) - existing_dates):
         try:
-            res = compute_cn_sentiment(d)
+            res = compute_cn_sentiment(d, market=market)
             if res:
-                persist_cn_sentiment(res["trade_date"], res["main"], res["subs"])
+                persist_cn_sentiment(res["trade_date"], res["main"], res["subs"], history_csv=history_csv)
                 Logger.info(f"补全缺失情绪数据: {d}")
         except Exception as exc:
             Logger.error(f"补全情绪数据失败: {d}, err={exc}")
 
+def ensure_cn_sentiment_record(trade_date: str, market="cn", history_csv=CN_HISTORY_CSV):
+    """只确保指定交易日记录存在，避免全量补齐导致阻塞。"""
+    if not trade_date:
+        return
+    df = pd.read_csv(history_csv) if history_csv.exists() else pd.DataFrame()
+    existing_dates = set(df["trade_date"].astype(str)) if not df.empty else set()
+    if str(trade_date) in existing_dates:
+        return
+    try:
+        res = compute_cn_sentiment(trade_date, market=market)
+        if res:
+            persist_cn_sentiment(res["trade_date"], res["main"], res["subs"], history_csv=history_csv)
+    except Exception as exc:
+        Logger.error(f"ensure cn sentiment failed: {trade_date}, err={exc}")
 
-def load_cn_history(required_dates=None):
+
+def load_cn_history(required_dates=None, market="cn", history_csv=CN_HISTORY_CSV, mandatory_dates=None):
     """加载历史数据，必要时补齐必需日期"""
-    required = set(MANDATORY_SENTIMENT_DATES)
+    required = set(mandatory_dates or [])
     if required_dates:
         required.update(str(d).replace("-", "") for d in required_dates)
 
-    df = pd.read_csv(CN_HISTORY_CSV) if CN_HISTORY_CSV.exists() else pd.DataFrame()
+    df = pd.read_csv(history_csv) if history_csv.exists() else pd.DataFrame()
     existing_dates = set(df["trade_date"].astype(str)) if not df.empty else set()
 
     missing = sorted(required - existing_dates)
     if missing:
         for d in missing:
             try:
-                res = compute_cn_sentiment(d)
+                res = compute_cn_sentiment(d, market=market)
                 if res:
-                    persist_cn_sentiment(res["trade_date"], res["main"], res["subs"])
+                    persist_cn_sentiment(res["trade_date"], res["main"], res["subs"], history_csv=history_csv)
                     Logger.info(f"补全缺失情绪数据: {d}")
             except Exception as exc:
                 Logger.error(f"补全情绪数据失败: {d}, err={exc}")
-        df = pd.read_csv(CN_HISTORY_CSV) if CN_HISTORY_CSV.exists() else pd.DataFrame()
+        df = pd.read_csv(history_csv) if history_csv.exists() else pd.DataFrame()
 
     if df.empty:
         return []
@@ -460,16 +510,18 @@ def load_cn_history(required_dates=None):
     df = df.sort_values("trade_date")
     return df.to_dict(orient="records")
 
-def build_subs_from_record(rec):
+def build_subs_from_record(rec, labels=None):
     """从历史记录重建细分指标列表"""
+    labels = labels or get_cn_sentiment_label_map("cn")
     mapping = [
-        ("市场动量(沪深300/125日均)", "momentum_val", "momentum_score"),
-        ("价格广度(上涨家数占比)", "breadth_val", "breadth_score"),
-        ("价格强度(涨停-跌停占比)", "strength_val", "strength_score"),
-        ("波动率(反向)", "volatility_val", "volatility_score"),
-        ("平均涨跌幅", "avgret_val", "avgret_score"),
-        ("沪深300期权PCR(IO)", "pcr_val", "pcr_score"),
+        (labels["momentum"], "momentum_val", "momentum_score"),
+        (labels["breadth"], "breadth_val", "breadth_score"),
+        (labels["strength"], "strength_val", "strength_score"),
+        (labels["volatility"], "volatility_val", "volatility_score"),
+        (labels["avgret"], "avgret_val", "avgret_score"),
     ]
+    if labels.get("pcr"):
+        mapping.append((labels["pcr"], "pcr_val", "pcr_score"))
     subs = []
     for label, val_key, score_key in mapping:
         val = rec.get(val_key)
@@ -480,11 +532,11 @@ def build_subs_from_record(rec):
             "score": score_val,
             "rating": score_rating(score_val) if score_val is not None else None
         })
-    # 若缺失PCR字段，从记录中追加
-    if not any(s["label"].startswith("沪深300期权PCR") for s in subs):
+    # 若缺失PCR字段，从记录中追加（仅当配置了PCR标签）
+    if labels.get("pcr") and not any(s["label"] == labels["pcr"] for s in subs):
         if "pcr_val" in rec or "pcr_score" in rec:
             subs.append({
-                "label": "沪深300期权PCR(IO)",
+                "label": labels["pcr"],
                 "value": rec.get("pcr_val"),
                 "score": rec.get("pcr_score"),
                 "rating": score_rating(rec.get("pcr_score")) if rec.get("pcr_score") is not None else None
@@ -595,6 +647,9 @@ def after_hours_data():
 
 @app.route('/cn-fear')
 def cn_fear():
+    market = "cn"
+    labels = get_cn_sentiment_label_map(market)
+    history_csv = CN_HISTORY_CSV
     trade_date = request.args.get("trade_date")
     if trade_date and "-" in trade_date:
         trade_date = trade_date.replace("-", "")
@@ -604,7 +659,7 @@ def cn_fear():
         now_bj = beijing_now()
         base_date = now_bj.date() if now_bj.hour >= 17 else now_bj.date() - datetime.timedelta(days=1)
         backfill_target = ensure_trade_date(base_date)
-    backfill_cn_sentiment_upto(backfill_target)
+    backfill_cn_sentiment_upto(backfill_target, market=market, history_csv=history_csv, mandatory_dates=MANDATORY_SENTIMENT_DATES)
     try:
         page = int(request.args.get("page", 1))
         page = max(page, 1)
@@ -624,14 +679,14 @@ def cn_fear():
     per_page = 20
 
     try:
-        result = compute_cn_sentiment(trade_date)
+        result = compute_cn_sentiment(trade_date, market=market)
         if result:
-            persist_cn_sentiment(result["trade_date"], result["main"], result["subs"])
+            persist_cn_sentiment(result["trade_date"], result["main"], result["subs"], history_csv=history_csv)
     except Exception as e:
         Logger.error(f"compute cn fear failed: {e}")
         result = None
 
-    history_records = load_cn_history()
+    history_records = load_cn_history(market=market, history_csv=history_csv, mandatory_dates=set())
 
     if not result and not history_records:
         error = "获取当日行情或计算情绪失败，请稍后重试。"
@@ -651,7 +706,7 @@ def cn_fear():
                 "timestamp": last.get("trade_date"),
                 "timestamp_cn": format_beijing_timestamp(str(last.get("trade_date"))),
             }
-            subs = build_subs_from_record(last)
+            subs = build_subs_from_record(last, labels=labels)
         history = [
             {
                 "x": int(datetime.datetime.strptime(str(rec["trade_date"]), "%Y%m%d").timestamp() * 1000),
@@ -700,7 +755,127 @@ def cn_fear():
         pagination=pagination,
         score_min_value=score_min_raw or "",
         score_max_value=score_max_raw or "",
-        error=error
+        error=error,
+        sentiment_active="cn"
+    )
+
+@app.route('/bse-fear')
+def bse_fear():
+    market = "bse"
+    labels = get_cn_sentiment_label_map(market)
+    history_csv = CN_BSE_HISTORY_CSV
+    trade_date = request.args.get("trade_date")
+    if trade_date and "-" in trade_date:
+        trade_date = trade_date.replace("-", "")
+    if trade_date:
+        backfill_target = trade_date
+    else:
+        now_bj = beijing_now()
+        base_date = now_bj.date() if now_bj.hour >= 17 else now_bj.date() - datetime.timedelta(days=1)
+        backfill_target = ensure_trade_date(base_date)
+    ensure_cn_sentiment_record(backfill_target, market=market, history_csv=history_csv)
+    try:
+        page = int(request.args.get("page", 1))
+        page = max(page, 1)
+    except (TypeError, ValueError):
+        page = 1
+    score_min_raw = request.args.get("score_min")
+    score_max_raw = request.args.get("score_max")
+
+    def parse_score(val):
+        try:
+            return float(val)
+        except (TypeError, ValueError):
+            return None
+
+    score_min_val = parse_score(score_min_raw)
+    score_max_val = parse_score(score_max_raw)
+    per_page = 20
+
+    try:
+        result = compute_cn_sentiment(trade_date, market=market)
+        if result:
+            persist_cn_sentiment(result["trade_date"], result["main"], result["subs"], history_csv=history_csv)
+    except Exception as e:
+        Logger.error(f"compute cn fear failed: {e}")
+        result = None
+
+    history_records = load_cn_history(market=market, history_csv=history_csv, mandatory_dates=set())
+
+    if not result and not history_records:
+        error = "获取当日行情或计算情绪失败，请稍后重试。"
+        main = {}
+        history = []
+        subs = []
+    else:
+        error = None if result else "当日计算失败，显示历史数据。"
+        if result:
+            main = result["main"]
+            subs = result["subs"]
+        else:
+            last = history_records[-1]
+            main = {
+                "score": last.get("score"),
+                "rating": last.get("rating"),
+                "timestamp": last.get("trade_date"),
+                "timestamp_cn": format_beijing_timestamp(str(last.get("trade_date"))),
+            }
+            subs = build_subs_from_record(last, labels=labels)
+        history = [
+            {
+                "x": int(datetime.datetime.strptime(str(rec["trade_date"]), "%Y%m%d").timestamp() * 1000),
+                "y": rec.get("score"),
+                "rating": rec.get("rating"),
+            }
+            for rec in history_records
+        ]
+
+    history_desc = list(reversed(history_records))
+
+    def match_score(row):
+        score = row.get("score")
+        if score_min_val is not None and (score is None or float(score) < score_min_val):
+            return False
+        if score_max_val is not None and (score is None or float(score) > score_max_val):
+            return False
+        return True
+
+    filtered_records = [rec for rec in history_desc if match_score(rec)]
+    total_filtered = len(filtered_records)
+    if total_filtered == 0:
+        total_pages = 1
+        page = 1
+    else:
+        total_pages = max(1, math.ceil(total_filtered / per_page))
+        page = min(page, total_pages)
+    start_idx = (page - 1) * per_page
+    history_page = filtered_records[start_idx:start_idx + per_page]
+
+    pagination = {
+        "page": page,
+        "total_pages": total_pages,
+        "has_prev": page > 1,
+        "has_next": page < total_pages,
+        "total": total_filtered
+    }
+
+    return render_template(
+        'cn_fear.html',
+        main=main,
+        history=history,
+        sub_indicators=subs,
+        trade_date=trade_date or (result["trade_date"] if result else None),
+        history_table=history_page,
+        pagination=pagination,
+        score_min_value=score_min_raw or "",
+        score_max_value=score_max_raw or "",
+        error=error,
+        sentiment_active="bse",
+        sentiment_title="北交所情绪指数",
+        sentiment_scope="北交所市场 · 恐慌/贪婪指数",
+        sentiment_name="北交所情绪",
+        sentiment_chart_label="北交所情绪",
+        sentiment_history_file="data/cn_sentiment_bse_history.csv"
     )
 
 def execute_screen_logic(filter_date, exclude_exchanges, exclude_st, filter_pe_gt_zero, sort_by):
