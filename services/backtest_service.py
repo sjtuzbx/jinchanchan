@@ -38,6 +38,9 @@ class BacktestService:
         hold_num = int(backtest_params['hold_stocks'])
         rebalance_period = int(backtest_params['rebalance_period'])
         rebalance_time = backtest_params.get('rebalance_time', 'open')
+        record_daily = backtest_params.get('record_daily_positions', True)
+        if isinstance(record_daily, str):
+            record_daily = record_daily.lower() in ('1', 'true', 'yes', 'on')
 
         trade_strategy = bs._screener.strategy_name_dict['trade_strategy']
         trade_strategy['start_time'] = str(start_date)
@@ -45,6 +48,7 @@ class BacktestService:
         trade_strategy['holding_period'] = rebalance_period
         trade_strategy['max_stock_num'] = hold_num
         trade_strategy['rebalancing_point'] = rebalance_time
+        trade_strategy['record_daily_positions'] = bool(record_daily)
 
         Logger.info(f"Running backtest from {start_date} to {end_date}, hold {hold_num}")
         result = bs.backtesting()

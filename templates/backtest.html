@@ -236,6 +236,7 @@
         let tradeHistoryData = [];
         let tradeReturnsData = [];
         let positionPage = 1;
+        let positionView = 'rebalance';
         let tradePage = 1;
         let tradeReturnPage = 1;
         let tradeReturnOrder = 'desc';
@@ -415,6 +416,10 @@
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <div>每日持仓</div>
                         <div class="d-flex align-items-center gap-2">
+                            <select class="form-select form-select-sm" style="width:auto" id="position-view" onchange="setPositionView(this.value)">
+                                <option value="rebalance" selected>仅调仓日</option>
+                                <option value="all">每日持仓</option>
+                            </select>
                             <span class="badge bg-primary-subtle text-primary border">蓝色：上期调出</span>
                             <span class="badge bg-danger-subtle text-danger border">红色：本期调入</span>
                             <button class="btn btn-sm btn-outline-secondary" onclick="changePositionPage(-1)">上一页</button>
@@ -428,6 +433,7 @@
                                 <tr>
                                     <th>日期</th>
                                     <th>可用资金</th>
+                                    <th>当日收益</th>
                                     <th>持仓明细</th>
                                 </tr>
                             </thead>
@@ -617,7 +623,8 @@
         }
 
         function changePositionPage(delta) {
-            const totalPages = Math.max(1, Math.ceil(positionHistoryData.length / PAGE_SIZE));
+            const filtered = getFilteredPositionHistory();
+            const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
             positionPage = Math.min(Math.max(1, positionPage + delta), totalPages);
             renderPositionTable();
         }
@@ -640,20 +647,32 @@
             renderTradeReturnTable();
         }
 
+        function setPositionView(view) {
+            positionView = view;
+            positionPage = 1;
+            renderPositionTable();
+        }
+
+        function getFilteredPositionHistory() {
+            if (positionView === 'all') return positionHistoryData;
+            return positionHistoryData.filter(item => item.is_rebalance !== false);
+        }
+
         function renderPositionTable() {
             const tbody = document.getElementById('position-table-body');
             const pagination = document.getElementById('position-pagination');
             const emptyHint = document.getElementById('position-empty');
-            const totalPages = Math.max(1, Math.ceil(positionHistoryData.length / PAGE_SIZE));
-            pagination.textContent = positionHistoryData.length ? `第 ${positionPage}/${totalPages} 页` : '暂无记录';
-            if (!positionHistoryData.length) {
+            const filtered = getFilteredPositionHistory();
+            const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+            pagination.textContent = filtered.length ? `第 ${positionPage}/${totalPages} 页` : '暂无记录';
+            if (!filtered.length) {
                 tbody.innerHTML = '';
                 emptyHint.style.display = 'block';
                 return;
             }
             emptyHint.style.display = 'none';
             const start = (positionPage - 1) * PAGE_SIZE;
-            const rows = positionHistoryData.slice(start, start + PAGE_SIZE).map(item => {
+            const rows = filtered.slice(start, start + PAGE_SIZE).map(item => {
                 const holdings = (item.positions || []).length
                     ? item.positions.map(pos => {
                         let cls = 'text-body';
@@ -662,10 +681,19 @@
                         return `<span class="${cls}">${pos.name || pos.code} (${pos.code}) × ${pos.shares}股 @ ${Number(pos.price ?? 0).toFixed(2)}</span>`;
                     }).join('<br>')
                     : '空仓';
+                let returnText = '-';
+                let returnCls = 'text-muted';
+                if (item.daily_return !== undefined && item.daily_return !== null) {
+                    const val = Number(item.daily_return);
+                    returnText = `${(val * 100).toFixed(2)}%`;
+                    if (val > 0) returnCls = 'text-success';
+                    else if (val < 0) returnCls = 'text-danger';
+                }
                 return `
                     <tr>
                         <td>${item.date}</td>
                         <td>${formatMoney(item.cash, 0)}</td>
+                        <td class="${returnCls}">${returnText}</td>
                         <td>${holdings}</td>
                     </tr>
                 `;
