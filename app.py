@@ -69,7 +69,7 @@ fedwatch_service = FedWatchService(
 alpha_portfolio_monitor = AlphaPortfolioMonitor(
     Path(__file__).resolve().parent / "portofolio" / "alpha_pick.csv",
     Path(__file__).resolve().parent / "data" / "alpha_portfolio_state.json",
-    base_date="2026-01-22",
+    base_date="2026-01-21",
 )
 
 DEBUG_MODE = os.getenv("JC_DEBUG", "0") == "1"

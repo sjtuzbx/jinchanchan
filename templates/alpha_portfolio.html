@@ -68,7 +68,12 @@
                     <div class="card h-100">
                         <div class="card-header d-flex justify-content-between align-items-center">
                             <h5 class="card-title mb-0">净值曲线</h5>
-                            <span class="muted small" id="nav-points"></span>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="muted small" id="nav-points"></span>
+                                <button class="btn btn-sm btn-outline-secondary" id="refresh-btn">
+                                    <i class="bi bi-arrow-repeat"></i> 刷新
+                                </button>
+                            </div>
                         </div>
                         <div class="card-body">
                             <canvas id="nav-chart" height="200"></canvas>
@@ -225,7 +230,16 @@
             renderRebalances(data.rebalance_logs || []);
         }
 
-        fetch('/portfolio/alpha/data').then(r => r.json()).then(renderDashboard).catch(err => alert(err));
+        function refreshData() {
+            fetch('/portfolio/alpha/data')
+                .then(r => r.json())
+                .then(renderDashboard)
+                .catch(err => alert(err));
+        }
+
+        document.getElementById('refresh-btn').addEventListener('click', refreshData);
+        refreshData();
+        setInterval(refreshData, 60 * 1000);
     </script>
 </body>
 </html>

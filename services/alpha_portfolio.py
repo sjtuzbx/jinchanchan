@@ -1,6 +1,8 @@
 import datetime
 import hashlib
 import json
+import time
+import concurrent.futures
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -11,6 +13,7 @@ from logger import Logger
 
 
 YAHOO_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
+STOOQ_HISTORY_URL = "https://stooq.com/q/d/l/"
 YAHOO_HEADERS = {
     "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
     "Accept": "application/json, text/plain, */*",
@@ -22,6 +25,7 @@ class AlphaPortfolioMonitor:
         self.csv_path = csv_path
         self.state_path = state_path
         self.base_date = base_date
+        self.session = requests.Session()
 
     def refresh(self) -> Dict:
         weights, csv_hash, missing_symbols = self._load_weights()
@@ -29,8 +33,14 @@ class AlphaPortfolioMonitor:
             return {"error": "alpha_pick.csv 无有效持仓"}
 
         state = self._load_state()
+        if state and state.get("error"):
+            state = None
+        if state and state.get("base_date") != self.base_date:
+            state = None
         if not state or state.get("csv_hash") != csv_hash:
             state = self._rebalance_or_init(state, weights, csv_hash, missing_symbols)
+            if state.get("error"):
+                return state
 
         state = self._update_nav(state)
         self._save_state(state)
@@ -198,12 +208,15 @@ class AlphaPortfolioMonitor:
         start = today - datetime.timedelta(days=12)
         end = today + datetime.timedelta(days=1)
         histories: Dict[str, Dict[str, float]] = {}
-        for item in items:
+        def load_history(item):
             symbol = item["yahoo_symbol"]
             history = self._fetch_history(symbol, start, end)
-            if not history:
-                continue
-            histories[symbol] = history
+            return symbol, history
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+            for symbol, history in executor.map(load_history, items):
+                if history:
+                    histories[symbol] = history
 
         if not histories:
             return {}, ""
@@ -226,26 +239,36 @@ class AlphaPortfolioMonitor:
         except Exception:
             target = datetime.date.today()
         today = datetime.date.today()
+        if target > today:
+            target = today
         end = max(target + datetime.timedelta(days=1), today + datetime.timedelta(days=1))
         start = target - datetime.timedelta(days=10)
         price_map: Dict[str, Dict] = {}
         base_dates: List[str] = []
-        for item in items:
+        def load_history(item):
             symbol = item["yahoo_symbol"]
             history = self._fetch_history(symbol, start, end)
-            if not history:
-                continue
-            date, price = self._close_on_or_before(history, target)
-            if not date:
-                date, price = self._latest_from_history(history)
-            if not date:
-                continue
-            price_map[symbol] = {"date": date, "price": price}
-            base_dates.append(date)
+            return symbol, history
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+            for symbol, history in executor.map(load_history, items):
+                if not history:
+                    continue
+                date, price = self._close_on_or_before(history, target)
+                if not date:
+                    date, price = self._latest_from_history(history)
+                if not date:
+                    continue
+                price_map[symbol] = {"date": date, "price": price}
+                base_dates.append(date)
         base_date = max(base_dates) if base_dates else ""
         return price_map, base_date
 
     def _fetch_history(self, symbol: str, start: datetime.date, end: datetime.date) -> Dict[str, float]:
+        history = self._fetch_history_stooq(symbol)
+        if history:
+            return history
+
         params = {
             "period1": int(datetime.datetime.combine(start, datetime.time.min).timestamp()),
             "period2": int(datetime.datetime.combine(end, datetime.time.min).timestamp()),
@@ -253,17 +276,27 @@ class AlphaPortfolioMonitor:
             "events": "history",
             "includeAdjustedClose": "true",
         }
-        try:
-            resp = requests.get(
-                YAHOO_CHART_URL.format(symbol=symbol),
-                headers=YAHOO_HEADERS,
-                params=params,
-                timeout=10,
-            )
-            resp.raise_for_status()
-            payload = resp.json()
-        except Exception as exc:
-            Logger.error(f"fetch yahoo history failed: {symbol}, err={exc}")
+        payload = None
+        for attempt in range(4):
+            try:
+                resp = self.session.get(
+                    YAHOO_CHART_URL.format(symbol=symbol),
+                    headers=YAHOO_HEADERS,
+                    params=params,
+                    timeout=10,
+                )
+                if resp.status_code == 429:
+                    time.sleep(1.0 + attempt * 0.8)
+                    continue
+                resp.raise_for_status()
+                payload = resp.json()
+                break
+            except Exception as exc:
+                if attempt == 3:
+                    Logger.error(f"fetch yahoo history failed: {symbol}, err={exc}")
+                    return {}
+                time.sleep(0.8 + attempt * 0.6)
+        if payload is None:
             return {}
 
         try:
@@ -280,6 +313,44 @@ class AlphaPortfolioMonitor:
             dt = datetime.datetime.utcfromtimestamp(ts).date()
             history[dt.strftime("%Y-%m-%d")] = float(close)
         return history
+
+    def _fetch_history_stooq(self, symbol: str) -> Dict[str, float]:
+        stooq_symbol = self._to_stooq_symbol(symbol)
+        if not stooq_symbol:
+            return {}
+        try:
+            resp = self.session.get(
+                STOOQ_HISTORY_URL,
+                params={"s": stooq_symbol, "i": "d"},
+                timeout=6,
+            )
+            resp.raise_for_status()
+        except Exception as exc:
+            Logger.error(f"fetch stooq history failed: {symbol}, err={exc}")
+            return {}
+
+        lines = resp.text.strip().splitlines()
+        if len(lines) <= 1:
+            return {}
+        history: Dict[str, float] = {}
+        for row in lines[1:]:
+            parts = row.split(",")
+            if len(parts) < 5:
+                continue
+            date = parts[0]
+            close = parts[4]
+            try:
+                history[date] = float(close)
+            except Exception:
+                continue
+        return history
+
+    def _to_stooq_symbol(self, symbol: str) -> str:
+        clean = symbol.strip()
+        if not clean:
+            return ""
+        clean = clean.replace(" ", ".").lower()
+        return f"{clean}.us"
 
     def _latest_from_history(self, history: Dict[str, float]) -> Tuple[str, Optional[float]]:
         if not history:
