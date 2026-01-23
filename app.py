@@ -34,6 +34,7 @@ from services.afterhours_service import AfterHoursService
 from services.macro_service import MacroDataService
 from services.fedwatch_service import FedWatchService
 from services.vix_intraday import VixIntradayStore
+from services.alpha_portfolio import AlphaPortfolioMonitor
 
 import tushare as ts
 try:
@@ -64,6 +65,11 @@ fedwatch_service = FedWatchService(
     cache_file=Path(__file__).resolve().parent / "data" / "fedwatch_cache.json",
     calendar_file=Path(__file__).resolve().parent / "data" / "fomc_calendar.json",
     history_file=Path(__file__).resolve().parent / "data" / "fedwatch_history.json",
+)
+alpha_portfolio_monitor = AlphaPortfolioMonitor(
+    Path(__file__).resolve().parent / "portofolio" / "alpha_pick.csv",
+    Path(__file__).resolve().parent / "data" / "alpha_portfolio_state.json",
+    base_date="2026-01-22",
 )
 
 DEBUG_MODE = os.getenv("JC_DEBUG", "0") == "1"
@@ -1107,6 +1113,17 @@ def get_strategy(name):
 @app.route('/portfolio')
 def portfolio_page():
     return render_template('portfolio.html')
+
+
+@app.route('/portfolio/alpha')
+def alpha_portfolio_page():
+    return render_template('alpha_portfolio.html')
+
+
+@app.route('/portfolio/alpha/data')
+def alpha_portfolio_data():
+    result = alpha_portfolio_monitor.refresh()
+    return jsonify(convert_numpy_types(result))
 
 
 def generate_backtest_results(params):

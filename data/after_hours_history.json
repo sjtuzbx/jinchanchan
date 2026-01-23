@@ -2988,5 +2988,45 @@
     "turnover_ratio": 0.030977312821892918,
     "margin_buy_amount": 450832249971.0,
     "margin_ratio": 0.11307948524887063
+  },
+  {
+    "trade_date": "20260116",
+    "total_market_value": 128040161713443.98,
+    "turnover_amount": 3056523974277.0,
+    "turnover_ratio": 0.023871603513884586,
+    "margin_buy_amount": 335709853781.0,
+    "margin_ratio": 0.10983386899833164
+  },
+  {
+    "trade_date": "20260119",
+    "total_market_value": 128456715303527.0,
+    "turnover_amount": 2732216214272.0005,
+    "turnover_ratio": 0.021269547550053093,
+    "margin_buy_amount": 267421320268.0,
+    "margin_ratio": 0.09787707095474303
+  },
+  {
+    "trade_date": "20260120",
+    "total_market_value": 128158477456500.98,
+    "turnover_amount": 2804235216197.0,
+    "turnover_ratio": 0.02188099665235803,
+    "margin_buy_amount": 263474125440.0,
+    "margin_ratio": 0.09395578656105527
+  },
+  {
+    "trade_date": "20260121",
+    "total_market_value": 128534134928398.98,
+    "turnover_amount": 2623747053498.9995,
+    "turnover_ratio": 0.020412842510361778,
+    "margin_buy_amount": 259939099745.0,
+    "margin_ratio": 0.0990717071595557
+  },
+  {
+    "trade_date": "20260122",
+    "total_market_value": 128932165770176.02,
+    "turnover_amount": 2716404578145.0,
+    "turnover_ratio": 0.021068478621440685,
+    "margin_buy_amount": 267902887470.0,
+    "margin_ratio": 0.09862407449369992
   }
 ]
