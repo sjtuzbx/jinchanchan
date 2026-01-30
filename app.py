@@ -31,6 +31,7 @@ from services.monitor_service import FuturesMonitorService
 from services.basis_history import BasisHistory
 from services.vix_history import VixHistoryStore
 from services.afterhours_service import AfterHoursService
+from services.liquidity_service import LiquidityService
 from services.macro_service import MacroDataService
 from services.fedwatch_service import FedWatchService
 from services.vix_intraday import VixIntradayStore
@@ -60,6 +61,7 @@ monitor_service = FuturesMonitorService(basis_history=basis_history, pro_client=
 vix_history_store = VixHistoryStore(Path(__file__).resolve().parent / "data" / "vix_history.json")
 vix_intraday_store = VixIntradayStore(Path(__file__).resolve().parent / "data" / "vix_intraday.json", interval_minutes=5)
 after_hours_service = AfterHoursService(pro, Path(__file__).resolve().parent / "data" / "after_hours_history.json")
+liquidity_service = LiquidityService(Path(__file__).resolve().parent / "data" / "net_liquidity_history.json")
 macro_service = MacroDataService()
 fedwatch_service = FedWatchService(
     cache_file=Path(__file__).resolve().parent / "data" / "fedwatch_cache.json",
@@ -646,6 +648,7 @@ def after_hours_data():
     try:
         payload = after_hours_service.get_payload()
         payload["fedwatch"] = fedwatch_service.get_snapshot()
+        payload["liquidity"] = liquidity_service.get_payload()
         return jsonify(convert_numpy_types(payload))
     except Exception as exc:
         Logger.error(f"fetch after-hours data failed: {exc}")

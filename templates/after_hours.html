@@ -20,6 +20,7 @@
                     <a href="{{ url_for('cb_screener') }}">可转债筛选</a>
                     <a href="{{ url_for('backtest_page') }}">回测</a>
                     <a href="{{ url_for('portfolio_page') }}">组合回测</a>
+                    <a href="{{ url_for('alpha_portfolio_page') }}">组合监控</a>
                     <a href="{{ url_for('fear_greed') }}">美股情绪</a>
                     <a href="{{ url_for('cn_fear') }}">A股情绪</a>
                     <a href="{{ url_for('bse_fear') }}">北交所情绪</a>
@@ -89,6 +90,55 @@
                 </div>
             </div>
 
+            <div class="card mb-4" id="liquidity-card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">美元流动性（WALCL - TGA - RRP）</h5>
+                    <small class="text-muted">日频 · 单位：十亿美元 · 数据源 FRED</small>
+                </div>
+                <div class="card-body">
+                    <div id="liquidity-error" class="alert alert-warning d-none mb-3"></div>
+                    <div class="row g-3">
+                        <div class="col-12 col-lg-3">
+                            <div class="border rounded p-3 h-100">
+                                <div class="text-muted small">净流动性</div>
+                                <div class="display-6 fw-bold" id="liquidity-net-value">--</div>
+                                <div class="text-muted small" id="liquidity-net-date">--</div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-lg-3">
+                            <div class="border rounded p-3 h-100">
+                                <div class="text-muted small">WALCL（Fed 资产）</div>
+                                <div class="display-6 fw-bold" id="liquidity-walcl-value">--</div>
+                                <div class="text-muted small" id="liquidity-walcl-date">--</div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-lg-3">
+                            <div class="border rounded p-3 h-100">
+                                <div class="text-muted small">WTREGEN（TGA）</div>
+                                <div class="display-6 fw-bold" id="liquidity-tga-value">--</div>
+                                <div class="text-muted small" id="liquidity-tga-date">--</div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-lg-3">
+                            <div class="border rounded p-3 h-100">
+                                <div class="text-muted small">RRPONTSYD（RRP）</div>
+                                <div class="display-6 fw-bold" id="liquidity-rrp-value">--</div>
+                                <div class="text-muted small" id="liquidity-rrp-date">--</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-4" id="liquidity-chart-card">
+                <div class="card-header">
+                    <h5 class="mb-0">净流动性 · 近 60 日</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="liquidity-chart" height="120"></canvas>
+                </div>
+            </div>
+
             <div class="card mb-4">
                 <div class="card-header">
                     <h5 class="mb-0">市值换手率 · 近一年</h5>
@@ -151,6 +201,7 @@
         const API_URL = "{{ url_for('after_hours_data') }}";
         let turnoverChart = null;
         let marginChart = null;
+        let liquidityChart = null;
 
         function formatPercent(value, digits = 2) {
             if (value === null || value === undefined || isNaN(value)) {
@@ -166,6 +217,11 @@
                 return `${(value / trillion).toFixed(2)} 万亿元`;
             }
             return `${(value / 1e8).toFixed(2)} 亿元`;
+        }
+
+        function formatUsdBillions(value) {
+            if (value === null || value === undefined || isNaN(value)) return '—';
+            return `${Number(value).toFixed(1)} B`;
         }
 
         function updateLatest(latest) {
@@ -238,6 +294,79 @@
             });
         }
 
+        function buildLiquidityChart(ctxId, history, color) {
+            const ctx = document.getElementById(ctxId);
+            if (!ctx) return null;
+            const labels = history.map(item => item.date);
+            const data = history.map(item => item.net_liquidity_bil);
+            return new Chart(ctx.getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: '净流动性',
+                        data,
+                        borderColor: color,
+                        backgroundColor: color.replace('1)', '0.08)'),
+                        borderWidth: 2,
+                        fill: true,
+                        pointRadius: 0,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            ticks: {
+                                callback: value => `${value.toFixed(0)}B`
+                            }
+                        }
+                    },
+                    interaction: { intersect: false, mode: 'index' },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+        }
+
+        function renderLiquidity(liquidity) {
+            const errBox = document.getElementById('liquidity-error');
+            if (!liquidity) {
+                errBox.textContent = '流动性数据暂不可用';
+                errBox.classList.remove('d-none');
+                return;
+            }
+            if (liquidity.error) {
+                errBox.textContent = liquidity.error;
+                errBox.classList.remove('d-none');
+            } else {
+                errBox.classList.add('d-none');
+            }
+            const latest = liquidity.latest || {};
+            const components = liquidity.components || {};
+            document.getElementById('liquidity-net-value').textContent = formatUsdBillions(latest.value);
+            document.getElementById('liquidity-net-date').textContent = latest.date ? `更新：${latest.date}` : '更新时间未知';
+
+            const walcl = components.walcl || {};
+            document.getElementById('liquidity-walcl-value').textContent = formatUsdBillions(walcl.value);
+            document.getElementById('liquidity-walcl-date').textContent = walcl.date ? `更新：${walcl.date}` : '更新时间未知';
+
+            const tga = components.tga || {};
+            document.getElementById('liquidity-tga-value').textContent = formatUsdBillions(tga.value);
+            document.getElementById('liquidity-tga-date').textContent = tga.date ? `更新：${tga.date}` : '更新时间未知';
+
+            const rrp = components.rrp || {};
+            document.getElementById('liquidity-rrp-value').textContent = formatUsdBillions(rrp.value);
+            document.getElementById('liquidity-rrp-date').textContent = rrp.date ? `更新：${rrp.date}` : '更新时间未知';
+
+            const history = liquidity.history || [];
+            if (liquidityChart) liquidityChart.destroy();
+            if (history.length) {
+                liquidityChart = buildLiquidityChart('liquidity-chart', history, 'rgba(25,135,84,1)');
+            }
+        }
+
         function renderFedWatch(fedwatch) {
             const card = document.getElementById('fedwatch-card');
             const errBox = document.getElementById('fedwatch-error');
@@ -307,6 +436,9 @@
                 }
                 if (payload.three_month_max_turnover) {
                     updateThreeMonthMax(payload.three_month_max_turnover);
+                }
+                if (payload.liquidity) {
+                    renderLiquidity(payload.liquidity);
                 }
                 if (payload.fedwatch) {
                     renderFedWatch(payload.fedwatch);
