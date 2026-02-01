@@ -12,6 +12,7 @@ class BacktestService:
         exclude_exchanges = filter_conditions.get('exclude_exchanges', [])
         exclude_st = 'exclude_st' in filter_conditions
         filter_pe_gt_zero = 'filter_pe_gt_zero' in filter_conditions
+        filter_forecast_profit_gt_zero = 'filter_forecast_profit_gt_zero' in filter_conditions
 
         mapping = {
             'main': 'zb_strategy',
@@ -28,6 +29,11 @@ class BacktestService:
             screener_dict['select_strategy'].pop('xsz_strategy', None)
         else:
             screener_dict['select_strategy']['xsz_strategy'] = screener_dict['select_strategy'].get('xsz_strategy', {})
+        
+        if not filter_forecast_profit_gt_zero:
+            screener_dict['select_strategy'].pop('xsz_profit_strategy', None)
+        else:
+            screener_dict['select_strategy']['xsz_profit_strategy'] = screener_dict['select_strategy'].get('xsz_profit_strategy', {})
 
     def run(self, filter_conditions, backtest_params):
         bs = Backtester(self.config_template)

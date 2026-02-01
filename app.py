@@ -887,7 +887,7 @@ def bse_fear():
         sentiment_history_file="data/cn_sentiment_bse_history.csv"
     )
 
-def execute_screen_logic(filter_date, exclude_exchanges, exclude_st, filter_pe_gt_zero, sort_by):
+def execute_screen_logic(filter_date, exclude_exchanges, exclude_st, filter_pe_gt_zero, filter_forecast_profit_gt_zero, sort_by):
     start_time = time.time()
     debug_print('screener start at ', start_time)
 
@@ -902,6 +902,11 @@ def execute_screen_logic(filter_date, exclude_exchanges, exclude_st, filter_pe_g
         screener.strategy_name_dict['select_strategy'].pop('xsz_strategy', None)
     else:
         screener.strategy_name_dict['select_strategy']['xsz_strategy'] = screener.strategy_name_dict['select_strategy'].get('xsz_strategy', {})
+    
+    if not filter_forecast_profit_gt_zero:
+        screener.strategy_name_dict['select_strategy'].pop('xsz_profit_strategy', None)
+    else:
+        screener.strategy_name_dict['select_strategy']['xsz_profit_strategy'] = screener.strategy_name_dict['select_strategy'].get('xsz_profit_strategy', {})
 
     error_msg = None
     try:
@@ -920,6 +925,7 @@ def execute_screen_logic(filter_date, exclude_exchanges, exclude_st, filter_pe_g
         net_assets = screener.dm.net_assets(screener.stock_list, date2int(filter_date))
         goodwill = np.nan_to_num(screener.dm.goodwill(screener.stock_list, date2int(filter_date)))
         profit_dedtQ = screener.dm.profit_dedtQ(screener.stock_list, date2int(filter_date))
+        profit_dedtQ_with_forecast = screener.dm.profit_dedtQ_with_forecast(screener.stock_list, date2int(filter_date))
         ewm_amount = screener.dm.ewm_amount(screener.stock_list, date2int(filter_date))
 
         avg_total_mv = []
@@ -938,6 +944,7 @@ def execute_screen_logic(filter_date, exclude_exchanges, exclude_st, filter_pe_g
                 'market_cap': total_mv[idx] / 1e8,
                 'quarterly_pe': total_mv[idx] / profit_dedtQ[idx] / 4 if profit_dedtQ[idx] else None,
                 'quarterly_net_profit': profit_dedtQ[idx] / 1e8,
+                'profit_dedtQ_with_forecast': profit_dedtQ_with_forecast[idx] / 1e8,
                 'goodwill': goodwill[idx] / 1e8,
                 'net_assets': net_assets[idx] / 1e8,
                 'adjusted_pb': total_mv[idx] / (net_assets[idx] - goodwill[idx]) if (net_assets[idx] - goodwill[idx]) else None,
@@ -954,6 +961,7 @@ def run_screener():
     exclude_exchanges = request.form.getlist('exclude_exchanges')
     exclude_st = 'exclude_st' in request.form
     filter_pe_gt_zero = 'filter_pe_gt_zero' in request.form
+    filter_forecast_profit_gt_zero = 'filter_forecast_profit_gt_zero' in request.form
     sort_by = request.form.get('sort_by', 'market_cap_asc')
     try:
         output_limit = int(request.form.get('output_limit', 25))
@@ -962,7 +970,7 @@ def run_screener():
     output_limit = max(1, min(output_limit, 200))
 
     res, error_msg, exchange_data = execute_screen_logic(
-        filter_date, exclude_exchanges, exclude_st, filter_pe_gt_zero, sort_by
+        filter_date, exclude_exchanges, exclude_st, filter_pe_gt_zero, filter_forecast_profit_gt_zero, sort_by
     )
     display_count = min(output_limit, len(res))
 
@@ -989,11 +997,13 @@ def run_cb_screener():
     exclude_exchanges = request.form.getlist('exclude_exchanges')
     exclude_st = 'exclude_st' in request.form
     filter_pe_gt_zero = 'filter_pe_gt_zero' in request.form
+    filter_forecast_profit_gt_zero = 'filter_forecast_profit_gt_zero' in request.form
 
     filter_conditions = {
         "exclude_exchanges": exclude_exchanges,
         "exclude_st": exclude_st,
         "filter_pe_gt_zero": filter_pe_gt_zero,
+        "filter_forecast_profit_gt_zero": filter_forecast_profit_gt_zero,
     }
     backtest_params = {
         "start_date": filter_date,
@@ -1037,6 +1047,7 @@ def export_screener():
     exclude_exchanges = request.args.getlist('exclude_exchanges')
     exclude_st = 'exclude_st' in request.args
     filter_pe_gt_zero = 'filter_pe_gt_zero' in request.args
+    filter_forecast_profit_gt_zero = 'filter_forecast_profit_gt_zero' in request.args
     sort_by = request.args.get('sort_by', 'market_cap_asc')
     try:
         output_limit = int(request.args.get('output_limit', 25))
@@ -1044,7 +1055,7 @@ def export_screener():
         output_limit = 25
     output_limit = max(1, min(output_limit, 200))
 
-    res, _, _ = execute_screen_logic(filter_date, exclude_exchanges, exclude_st, filter_pe_gt_zero, sort_by)
+    res, _, _ = execute_screen_logic(filter_date, exclude_exchanges, exclude_st, filter_pe_gt_zero, filter_forecast_profit_gt_zero, sort_by)
     res = res[:output_limit]
     lines = ["代码,名字"] + [f"{item['id']},{item['name']}" for item in res]
     csv_data = "\n".join(lines)
