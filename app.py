@@ -18,6 +18,11 @@ from backtest.data_manager import change_ts
 from logger import Logger
 import traceback
 import requests
+import html
+import xml.etree.ElementTree as ET
+import re
+from email.utils import parsedate_to_datetime
+import h5py as h5
 from services.utils import (
     date2int,
     format_beijing_timestamp,
@@ -77,6 +82,7 @@ alpha_portfolio_monitor = AlphaPortfolioMonitor(
 DEBUG_MODE = os.getenv("JC_DEBUG", "0") == "1"
 CALENDAR_CSV_PATH = Path("/home/zbx/python_utils/python_utils/calendar.csv")
 CALENDAR_DATE_CACHE = None
+DAILY_HDF_PATH = "/home/zbx/market_data/daily.hdf"
 
 
 def debug_print(*args, **kwargs):
@@ -117,6 +123,276 @@ def resolve_valid_date(date_str: str, valid_set: set) -> str:
             return candidate
     return date_str
 
+
+def int2date(date_int):
+    date_str = str(date_int)
+    if len(date_str) != 8:
+        return date_str
+    return f"{date_str[0:4]}-{date_str[4:6]}-{date_str[6:8]}"
+
+
+def resolve_trade_date(request_date_int):
+    if not os.path.exists(DAILY_HDF_PATH):
+        return None, None
+    with h5.File(DAILY_HDF_PATH, 'r') as f:
+        dates = f['dates'][()]
+    if dates.size == 0:
+        return None, None
+
+    if request_date_int is None:
+        return int(dates[-1]), int(dates[-1])
+
+    idx = int(np.searchsorted(dates, request_date_int, side='right') - 1)
+    if idx < 0:
+        return int(dates[0]), int(dates[0])
+
+    return int(dates[idx]), int(dates[-1])
+
+
+def _load_trump_truth_cache():
+    if not TRUMP_TRUTH_CACHE_PATH.exists():
+        return {"last_fetch": None, "items": []}
+    try:
+        payload = json.loads(TRUMP_TRUTH_CACHE_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return {"last_fetch": None, "items": []}
+    if not isinstance(payload, dict):
+        return {"last_fetch": None, "items": []}
+    items = payload.get("items")
+    if not isinstance(items, list):
+        items = []
+    return {
+        "last_fetch": payload.get("last_fetch"),
+        "items": items,
+        "last_error": payload.get("last_error"),
+    }
+
+
+def _save_trump_truth_cache(payload: dict):
+    TRUMP_TRUTH_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    TRUMP_TRUTH_CACHE_PATH.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def _strip_html(text: str) -> str:
+    if not text:
+        return ""
+    # Remove simple tags and unescape entities
+    cleaned = re.sub(r"<[^>]+>", "", text)
+    return html.unescape(cleaned).strip()
+
+
+def _translate_en_to_zh(text: str) -> str:
+    if not text:
+        return ""
+    try:
+        resp = requests.get(
+            "https://api.mymemory.translated.net/get",
+            params={"q": text, "langpair": "en|zh-CN"},
+            timeout=10,
+        )
+        if resp.status_code != 200:
+            return ""
+        data = resp.json()
+        translated = data.get("responseData", {}).get("translatedText")
+        if not translated or not isinstance(translated, str):
+            return ""
+        return translated.strip()
+    except Exception:
+        return ""
+
+
+def _parse_trump_truth_feed(content: str):
+    items = []
+    try:
+        root = ET.fromstring(content)
+    except Exception:
+        return items
+    channel = root.find("channel")
+    if channel is None:
+        return items
+    for item in channel.findall("item"):
+        title = item.findtext("title") or ""
+        link = item.findtext("link") or ""
+        guid = item.findtext("guid") or link or title
+        pub_date = item.findtext("pubDate") or ""
+        description = item.findtext("description") or ""
+        text_en = _strip_html(description) or _strip_html(title)
+        if not text_en:
+            continue
+        lower_text = text_en.strip().lower()
+        if lower_text.startswith("[no title]"):
+            continue
+        if lower_text.startswith("rt") and "http" in lower_text and len(lower_text.split()) <= 3:
+            continue
+        if lower_text.startswith("rt @") and len(lower_text.split()) <= 3:
+            continue
+        if not text_en:
+            continue
+        items.append(
+            {
+                "id": guid,
+                "link": link,
+                "published_at": pub_date,
+                "text_en": text_en,
+            }
+        )
+    return items
+
+
+def refresh_trump_truth(force: bool = False):
+    payload = _load_trump_truth_cache()
+    last_fetch = payload.get("last_fetch")
+    if not force and last_fetch:
+        try:
+            last_dt = datetime.datetime.fromisoformat(last_fetch)
+            if (datetime.datetime.utcnow() - last_dt).total_seconds() < TRUMP_TRUTH_REFRESH_SEC:
+                return payload
+        except Exception:
+            pass
+
+    try:
+        resp = requests.get(TRUMP_TRUTH_FEED_URL, timeout=15)
+        if resp.status_code != 200:
+            payload["last_error"] = f"HTTP {resp.status_code}"
+            return payload
+        items = _parse_trump_truth_feed(resp.text)
+    except Exception as exc:
+        payload["last_error"] = str(exc)
+        return payload
+
+    existing = {item.get("id"): item for item in payload.get("items", []) if isinstance(item, dict)}
+    merged = []
+    for item in items:
+        saved = existing.get(item["id"])
+        text_zh = ""
+        if saved and saved.get("text_zh"):
+            text_zh = saved.get("text_zh")
+        if not text_zh:
+            text_zh = _translate_en_to_zh(item["text_en"])
+        item["text_zh"] = text_zh
+        merged.append(item)
+
+    payload["items"] = merged[:TRUMP_TRUTH_MAX_ITEMS]
+    payload["last_fetch"] = datetime.datetime.utcnow().isoformat()
+    payload["last_error"] = None
+    _save_trump_truth_cache(payload)
+    return payload
+
+
+def to_cache_symbol(ts_code):
+    if ts_code is None:
+        return None
+    if ts_code.endswith('.SH'):
+        return ts_code.replace('.SH', '.SSE')
+    if ts_code.endswith('.SZ'):
+        return ts_code.replace('.SZ', '.SZE')
+    if ts_code.endswith('.BJ'):
+        return ts_code.replace('.BJ', '.BSE')
+    return ts_code
+
+
+def fetch_sw_industries():
+    df = pro.index_classify(level='L1', src='SW2021')
+    if df is None or df.empty:
+        return []
+    df = df.sort_values(by='index_code')
+    return df[['index_code', 'industry_name']].to_dict('records')
+
+
+def fetch_industry_members(index_code, date_int):
+    df = pro.index_member(index_code=index_code, fields='index_code,con_code,in_date,out_date')
+    if df is None or df.empty:
+        return []
+
+    def to_int(x):
+        if x is None or x == '' or (isinstance(x, float) and np.isnan(x)):
+            return None
+        return int(x)
+
+    in_dates = df['in_date'].apply(to_int)
+    out_dates = df['out_date'].apply(to_int)
+    active_mask = (in_dates <= date_int) & (out_dates.isna() | (out_dates >= date_int))
+    members = df.loc[active_mask, 'con_code'].dropna().unique().tolist()
+    return members
+
+
+def calculate_industry_breadth(date_int):
+    cache_hit = INDUSTRY_BREADTH_CACHE.get(date_int)
+    if cache_hit:
+        return cache_hit
+
+    industries = fetch_sw_industries()
+    if not industries:
+        return [], date_int, None
+
+    industry_members = []
+    all_symbols = set()
+    for item in industries:
+        members = fetch_industry_members(item['index_code'], date_int)
+        symbols = [to_cache_symbol(x) for x in members]
+        symbols = [x for x in symbols if x]
+        industry_members.append({
+            'index_code': item['index_code'],
+            'industry_name': item['industry_name'],
+            'symbols': symbols
+        })
+        all_symbols.update(symbols)
+
+    if not os.path.exists(DAILY_HDF_PATH):
+        return [], date_int, None
+
+    with h5.File(DAILY_HDF_PATH, 'r') as f:
+        dates = f['dates'][()]
+        if dates.size == 0:
+            return [], date_int, None
+        date_idx = int(np.searchsorted(dates, date_int))
+        if date_idx >= len(dates) or dates[date_idx] != date_int:
+            date_idx = int(np.searchsorted(dates, date_int, side='right') - 1)
+        if date_idx < 19:
+            return [], date_int, None
+
+        valid_symbols = np.array([x.decode('utf-8') for x in f['symbols'][()]])
+        symbol_index = {sym: idx for idx, sym in enumerate(valid_symbols)}
+
+        symbols = [s for s in all_symbols if s in symbol_index]
+        if not symbols:
+            return [], date_int, None
+
+        indices = [symbol_index[s] for s in symbols]
+        close_data = f['close'][date_idx-19:date_idx+1, indices]
+
+    ma20 = np.nanmean(close_data, axis=0)
+    last_close = close_data[-1, :]
+    valid = (~np.isnan(ma20)) & (~np.isnan(last_close))
+    above = (last_close >= ma20) & valid
+    symbol_pos = {s: i for i, s in enumerate(symbols)}
+
+    results = []
+    for industry in industry_members:
+        positions = [symbol_pos[s] for s in industry['symbols'] if s in symbol_pos]
+        total = len(positions)
+        if total == 0:
+            ratio = 0.0
+            above_count = 0
+        else:
+            above_count = int(np.sum(above[positions]))
+            ratio = above_count / total
+        results.append({
+            'index_code': industry['index_code'],
+            'industry_name': industry['industry_name'],
+            'above_count': above_count,
+            'total_count': total,
+            'ratio': ratio
+        })
+
+    results = sorted(results, key=lambda x: x['ratio'], reverse=True)
+    payload = (results, date_int, len(industries))
+    INDUSTRY_BREADTH_CACHE[date_int] = payload
+    return payload
+
 FEAR_GREED_URL = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
 FEAR_GREED_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
@@ -134,6 +410,11 @@ app = Flask(__name__)
 TODAY = datetime.date.today().isoformat()
 screener = Screener('strategy_config.json.template')
 TRADE_DAY_CACHE = {}
+INDUSTRY_BREADTH_CACHE = {}
+TRUMP_TRUTH_CACHE_PATH = Path(__file__).resolve().parent / "data" / "trump_truth_cache.json"
+TRUMP_TRUTH_FEED_URL = "https://trumpstruth.org/feed"
+TRUMP_TRUTH_REFRESH_SEC = 15 * 60
+TRUMP_TRUTH_MAX_ITEMS = 1000
 
 
 def resolve_trade_date_for_cutoff(cutoff_hour: int = 15) -> str:
@@ -580,6 +861,118 @@ def index():
                            valid_dates_json=json.dumps(valid_dates, ensure_ascii=False))
 
 
+@app.route('/industry_breadth')
+def industry_breadth_page():
+    filter_date = request.args.get('date', None)
+    request_date_int = date2int(filter_date) if filter_date else None
+
+    trade_date_int, last_data_date_int = resolve_trade_date(request_date_int)
+    if trade_date_int is None:
+        return render_template(
+            'industry_breadth.html',
+            rows=[],
+            top_rows=[],
+            filter_date=filter_date,
+            trade_date=None,
+            last_data_date=None,
+            industry_count=None,
+            error_message='未找到日线数据文件 daily.hdf'
+        )
+
+    rows, trade_date_int, industry_count = calculate_industry_breadth(trade_date_int)
+    top_rows = rows[:3]
+
+    return render_template(
+        'industry_breadth.html',
+        rows=rows,
+        top_rows=top_rows,
+        filter_date=int2date(request_date_int) if request_date_int else '',
+        trade_date=int2date(trade_date_int),
+        last_data_date=int2date(last_data_date_int) if last_data_date_int else None,
+        industry_count=industry_count,
+        error_message=None
+    )
+
+
+@app.route('/industry_breadth.csv')
+def industry_breadth_csv():
+    filter_date = request.args.get('date', None)
+    request_date_int = date2int(filter_date) if filter_date else None
+    trade_date_int, _ = resolve_trade_date(request_date_int)
+    if trade_date_int is None:
+        return Response("missing daily.hdf", status=404, mimetype="text/plain")
+    rows, trade_date_int, _ = calculate_industry_breadth(trade_date_int)
+    lines = ["trade_date,rank,industry_name,index_code,breadth_ratio,above_count,total_count"]
+    for idx, row in enumerate(rows, 1):
+        ratio = f"{row['ratio']:.6f}"
+        lines.append(
+            f"{int2date(trade_date_int)},{idx},{row['industry_name']},{row['index_code']},{ratio},{row['above_count']},{row['total_count']}"
+        )
+    csv_text = "\n".join(lines)
+    return Response(csv_text, mimetype="text/csv")
+
+
+@app.route('/trump_truth')
+def trump_truth_page():
+    payload = refresh_trump_truth(force=False)
+    items = payload.get("items", [])
+    q = (request.args.get("q") or "").strip()
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    month = now_utc.month - 3
+    year = now_utc.year
+    while month <= 0:
+        month += 12
+        year -= 1
+    try:
+        cutoff = now_utc.replace(year=year, month=month)
+    except ValueError:
+        # handle month day overflow
+        last_day = (datetime.date(year, month + 1, 1) - datetime.timedelta(days=1)).day if month < 12 else 31
+        cutoff = now_utc.replace(year=year, month=month, day=min(now_utc.day, last_day))
+
+    def parse_pub(item):
+        pub = item.get("published_at") or ""
+        try:
+            dt = parsedate_to_datetime(pub)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=datetime.timezone.utc)
+            return dt.astimezone(datetime.timezone.utc)
+        except Exception:
+            return None
+
+    filtered = []
+    for item in items:
+        dt = parse_pub(item)
+        if dt is None or dt < cutoff:
+            continue
+        filtered.append(item)
+    items = filtered
+
+    if q:
+        q_lower = q.lower()
+        def match(item):
+            text_en = (item.get("text_en") or "").lower()
+            text_zh = (item.get("text_zh") or "").lower()
+            return q_lower in text_en or q_lower in text_zh
+        items = [item for item in items if match(item)]
+    last_fetch = payload.get("last_fetch")
+    last_error = payload.get("last_error")
+    return render_template(
+        'trump_truth.html',
+        items=items,
+        last_fetch=last_fetch,
+        last_error=last_error,
+        query=q,
+        cutoff_date=cutoff.strftime("%Y-%m-%d")
+    )
+
+
+@app.route('/trump_truth/refresh')
+def trump_truth_refresh():
+    refresh_trump_truth(force=True)
+    return redirect(url_for('trump_truth_page'))
+
+
 @app.route('/cb-screener')
 def cb_screener():
     valid_dates = load_valid_trade_dates()
@@ -887,7 +1280,15 @@ def bse_fear():
         sentiment_history_file="data/cn_sentiment_bse_history.csv"
     )
 
-def execute_screen_logic(filter_date, exclude_exchanges, exclude_st, filter_pe_gt_zero, filter_forecast_profit_gt_zero, sort_by):
+def execute_screen_logic(
+    filter_date,
+    exclude_exchanges,
+    exclude_st,
+    filter_pe_gt_zero,
+    filter_forecast_profit_gt_zero,
+    filter_dedt_forecast_profit_gt_zero,
+    sort_by
+):
     start_time = time.time()
     debug_print('screener start at ', start_time)
 
@@ -908,6 +1309,11 @@ def execute_screen_logic(filter_date, exclude_exchanges, exclude_st, filter_pe_g
     else:
         screener.strategy_name_dict['select_strategy']['xsz_profit_strategy'] = screener.strategy_name_dict['select_strategy'].get('xsz_profit_strategy', {})
 
+    if not filter_dedt_forecast_profit_gt_zero:
+        screener.strategy_name_dict['select_strategy'].pop('xsz_dedt_profit_strategy', None)
+    else:
+        screener.strategy_name_dict['select_strategy']['xsz_dedt_profit_strategy'] = screener.strategy_name_dict['select_strategy'].get('xsz_dedt_profit_strategy', {})
+
     error_msg = None
     try:
         stocks = screener.select(date2int(filter_date)) or []
@@ -926,6 +1332,7 @@ def execute_screen_logic(filter_date, exclude_exchanges, exclude_st, filter_pe_g
         goodwill = np.nan_to_num(screener.dm.goodwill(screener.stock_list, date2int(filter_date)))
         profit_dedtQ = screener.dm.profit_dedtQ(screener.stock_list, date2int(filter_date))
         profit_dedtQ_with_forecast = screener.dm.profit_dedtQ_with_forecast(screener.stock_list, date2int(filter_date))
+        profit_dedtQ_with_dedt_forecast = screener.dm.profit_dedtQ_with_dedt_forecast(screener.stock_list, date2int(filter_date))
         ewm_amount = screener.dm.ewm_amount(screener.stock_list, date2int(filter_date))
 
         avg_total_mv = []
@@ -945,6 +1352,7 @@ def execute_screen_logic(filter_date, exclude_exchanges, exclude_st, filter_pe_g
                 'quarterly_pe': total_mv[idx] / profit_dedtQ[idx] / 4 if profit_dedtQ[idx] else None,
                 'quarterly_net_profit': profit_dedtQ[idx] / 1e8,
                 'profit_dedtQ_with_forecast': profit_dedtQ_with_forecast[idx] / 1e8,
+                'profit_dedtQ_with_dedt_forecast': profit_dedtQ_with_dedt_forecast[idx] / 1e8,
                 'goodwill': goodwill[idx] / 1e8,
                 'net_assets': net_assets[idx] / 1e8,
                 'adjusted_pb': total_mv[idx] / (net_assets[idx] - goodwill[idx]) if (net_assets[idx] - goodwill[idx]) else None,
@@ -962,6 +1370,7 @@ def run_screener():
     exclude_st = 'exclude_st' in request.form
     filter_pe_gt_zero = 'filter_pe_gt_zero' in request.form
     filter_forecast_profit_gt_zero = 'filter_forecast_profit_gt_zero' in request.form
+    filter_dedt_forecast_profit_gt_zero = 'filter_dedt_forecast_profit_gt_zero' in request.form
     sort_by = request.form.get('sort_by', 'market_cap_asc')
     try:
         output_limit = int(request.form.get('output_limit', 25))
@@ -970,7 +1379,13 @@ def run_screener():
     output_limit = max(1, min(output_limit, 200))
 
     res, error_msg, exchange_data = execute_screen_logic(
-        filter_date, exclude_exchanges, exclude_st, filter_pe_gt_zero, filter_forecast_profit_gt_zero, sort_by
+        filter_date,
+        exclude_exchanges,
+        exclude_st,
+        filter_pe_gt_zero,
+        filter_forecast_profit_gt_zero,
+        filter_dedt_forecast_profit_gt_zero,
+        sort_by
     )
     display_count = min(output_limit, len(res))
 
@@ -984,6 +1399,8 @@ def run_screener():
                            exclude_exchanges=exclude_exchanges,
                            exclude_st=exclude_st,
                            filter_pe_gt_zero=filter_pe_gt_zero,
+                           filter_forecast_profit_gt_zero=filter_forecast_profit_gt_zero,
+                           filter_dedt_forecast_profit_gt_zero=filter_dedt_forecast_profit_gt_zero,
                            sort_by=sort_by,
                            exchange_data=exchange_data)
 
@@ -998,12 +1415,14 @@ def run_cb_screener():
     exclude_st = 'exclude_st' in request.form
     filter_pe_gt_zero = 'filter_pe_gt_zero' in request.form
     filter_forecast_profit_gt_zero = 'filter_forecast_profit_gt_zero' in request.form
+    filter_dedt_forecast_profit_gt_zero = 'filter_dedt_forecast_profit_gt_zero' in request.form
 
     filter_conditions = {
         "exclude_exchanges": exclude_exchanges,
         "exclude_st": exclude_st,
         "filter_pe_gt_zero": filter_pe_gt_zero,
         "filter_forecast_profit_gt_zero": filter_forecast_profit_gt_zero,
+        "filter_dedt_forecast_profit_gt_zero": filter_dedt_forecast_profit_gt_zero,
     }
     backtest_params = {
         "start_date": filter_date,
@@ -1048,6 +1467,7 @@ def export_screener():
     exclude_st = 'exclude_st' in request.args
     filter_pe_gt_zero = 'filter_pe_gt_zero' in request.args
     filter_forecast_profit_gt_zero = 'filter_forecast_profit_gt_zero' in request.args
+    filter_dedt_forecast_profit_gt_zero = 'filter_dedt_forecast_profit_gt_zero' in request.args
     sort_by = request.args.get('sort_by', 'market_cap_asc')
     try:
         output_limit = int(request.args.get('output_limit', 25))
@@ -1055,7 +1475,15 @@ def export_screener():
         output_limit = 25
     output_limit = max(1, min(output_limit, 200))
 
-    res, _, _ = execute_screen_logic(filter_date, exclude_exchanges, exclude_st, filter_pe_gt_zero, filter_forecast_profit_gt_zero, sort_by)
+    res, _, _ = execute_screen_logic(
+        filter_date,
+        exclude_exchanges,
+        exclude_st,
+        filter_pe_gt_zero,
+        filter_forecast_profit_gt_zero,
+        filter_dedt_forecast_profit_gt_zero,
+        sort_by
+    )
     res = res[:output_limit]
     lines = ["代码,名字"] + [f"{item['id']},{item['name']}" for item in res]
     csv_data = "\n".join(lines)

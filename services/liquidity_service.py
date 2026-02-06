@@ -23,10 +23,15 @@ class LiquidityService:
 
     def get_payload(self) -> Dict:
         now = beijing_now()
-        today = now.date().isoformat()
         cached = load_json_if_exists(self.cache_file, default=None)
-        if cached and cached.get("updated_date") == today and cached.get("history"):
-            return cached
+        if cached and cached.get("history"):
+            cached_latest = self._cached_latest_date(cached)
+            if cached_latest:
+                try:
+                    if not self._has_new_data_since(cached_latest):
+                        return cached
+                except Exception as exc:
+                    Logger.error(f"liquidity freshness check failed: {exc}")
         try:
             payload = self._build_payload(now)
             dump_json(self.cache_file, payload)
@@ -87,3 +92,42 @@ class LiquidityService:
         series = series.sort_index()
         series = series[series.index.date >= cutoff_date]
         return series
+
+    def _cached_latest_date(self, cached: Dict) -> Optional[datetime.date]:
+        dates = []
+        for key in ("walcl", "tga", "rrp"):
+            date_str = cached.get("components", {}).get(key, {}).get("date")
+            if date_str:
+                try:
+                    dates.append(datetime.date.fromisoformat(date_str))
+                except ValueError:
+                    pass
+        latest_date = cached.get("latest", {}).get("date")
+        if latest_date:
+            try:
+                dates.append(datetime.date.fromisoformat(latest_date))
+            except ValueError:
+                pass
+        return max(dates) if dates else None
+
+    def _has_new_data_since(self, cached_latest: datetime.date) -> bool:
+        start = cached_latest - datetime.timedelta(days=7)
+        for series_id in self.SERIES.values():
+            latest = self._latest_observation_date(series_id, start)
+            if latest and latest > cached_latest:
+                return True
+        return False
+
+    def _latest_observation_date(self, series_id: str, start_date: datetime.date) -> Optional[datetime.date]:
+        url = (
+            "https://fred.stlouisfed.org/graph/fredgraph.csv"
+            f"?id={series_id}&cosd={start_date.isoformat()}"
+        )
+        df = pd.read_csv(url)
+        date_col = "DATE" if "DATE" in df.columns else "observation_date"
+        df[date_col] = pd.to_datetime(df[date_col])
+        values = pd.to_numeric(df[series_id], errors="coerce")
+        df = df.loc[~values.isna(), date_col]
+        if df.empty:
+            return None
+        return df.max().date()

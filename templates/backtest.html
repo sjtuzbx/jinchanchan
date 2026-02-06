@@ -80,6 +80,16 @@
                                             name="filter_pe_gt_zero" id="filter-pe" checked>
                                         <label class="form-check-label" for="filter-pe">季度扣非PE>0 且扣除商誉PB>0</label>
                                     </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" value="true"
+                                            name="filter_forecast_profit_gt_zero" id="filter-profit-forecast">
+                                        <label class="form-check-label" for="filter-profit-forecast">业绩预告季度净利润>0 且扣除商誉PB>0</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" value="true"
+                                            name="filter_dedt_forecast_profit_gt_zero" id="filter-dedt-profit-forecast">
+                                        <label class="form-check-label" for="filter-dedt-profit-forecast">业绩预告季度扣非净利润>0 且扣除商誉PB>0</label>
+                                    </div>
                                 </div>
                             </form>
                         </div>
@@ -352,7 +362,11 @@
             document.getElementById('exclude-st').checked = !!filter.exclude_st;
             const filterPe = document.getElementById('filter-pe');
             if (filterPe) filterPe.checked = !!filter.filter_pe_gt_zero;
-            const filterDateInput = document.querySelector('input[name=\"filter_date\"]');
+            const filterProfitForecast = document.getElementById('filter-profit-forecast');
+            if (filterProfitForecast) filterProfitForecast.checked = !!filter.filter_forecast_profit_gt_zero;
+            const filterDedtProfitForecast = document.getElementById('filter-dedt-profit-forecast');
+            if (filterDedtProfitForecast) filterDedtProfitForecast.checked = !!filter.filter_dedt_forecast_profit_gt_zero;
+            const filterDateInput = document.querySelector('input[name="filter_date"]');
             if (filter.filter_date && filterDateInput) filterDateInput.value = filter.filter_date;
 
             // backtest params

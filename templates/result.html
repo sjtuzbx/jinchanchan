@@ -55,6 +55,8 @@
                         {% endfor %}
                         {% if exclude_st %}<input type="hidden" name="exclude_st" value="true">{% endif %}
                         {% if filter_pe_gt_zero %}<input type="hidden" name="filter_pe_gt_zero" value="true">{% endif %}
+                        {% if filter_forecast_profit_gt_zero %}<input type="hidden" name="filter_forecast_profit_gt_zero" value="true">{% endif %}
+                        {% if filter_dedt_forecast_profit_gt_zero %}<input type="hidden" name="filter_dedt_forecast_profit_gt_zero" value="true">{% endif %}
                         <input type="hidden" name="sort_by" value="{{ sort_by }}">
                         <input type="hidden" name="output_limit" value="{{ output_limit }}">
                         <button type="submit" class="btn btn-outline-secondary">
@@ -123,6 +125,7 @@
                                     <th>EWMA成交额(万元)</th>
                                     <th>季度扣非净利润(亿元)</th>
                                     <th>预告季度净利润(亿元)</th>
+                                    <th>预告季度扣非净利润(亿元)</th>
                                     <th>商誉(亿元)</th>
                                     <th>净资产(亿元)</th>
                                     <th>是否ST</th>
@@ -145,6 +148,7 @@
                                     <td>{{ stock.ewm_amount|round(2) if stock.ewm_amount is not none else '-' }}</td>
                                     <td>{{ stock.quarterly_net_profit|round(4) }}</td>
                                     <td>{{ stock.profit_dedtQ_with_forecast|round(4) }}</td>
+                                    <td>{{ stock.profit_dedtQ_with_dedt_forecast|round(4) }}</td>
                                     <td>{{ stock.goodwill|round(4) }}</td>
                                     <td>{{ stock.net_assets|round(2) }}</td>
                                     <td>

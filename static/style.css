@@ -188,3 +188,7 @@ canvas {
         margin-bottom: 1rem;
     }
 }
+
+.industry-top-card {
+    border-left: 4px solid var(--primary);
+}

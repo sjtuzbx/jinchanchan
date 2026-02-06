@@ -23,6 +23,8 @@
                     <a href="{{ url_for('fear_greed') }}">美股情绪</a>
                     <a href="{{ url_for('cn_fear') }}">A股情绪</a>
                     <a href="{{ url_for('bse_fear') }}">北交所情绪</a>
+                    <a href="{{ url_for('trump_truth_page') }}">川普又说了什么</a>
+                    <a href="{{ url_for('industry_breadth_page') }}">行业宽度</a>
                     <a href="{{ url_for('monitor_page') }}">实时监控</a>
                     <a href="{{ url_for('after_hours_page') }}">盘后监控</a>
                 </nav>
@@ -38,6 +40,8 @@
                 </div>
                 <div class="d-flex gap-2">
                     <a href="{{ url_for('backtest_page') }}" class="btn btn-outline-primary">策略回测</a>
+                    <a href="{{ url_for('industry_breadth_page') }}" class="btn btn-outline-primary">行业宽度</a>
+                    <a href="{{ url_for('trump_truth_page') }}" class="btn btn-outline-primary">川普又说了什么</a>
                     <a href="{{ url_for('fear_greed') }}" class="btn btn-outline-primary">美股情绪</a>
                     <a href="{{ url_for('cn_fear') }}" class="btn btn-outline-primary">A股情绪</a>
                     <a href="{{ url_for('monitor_page') }}" class="btn btn-primary">实时监控</a>
@@ -87,6 +91,10 @@
                                     <div class="form-check">
                                         <input class="form-check-input" type="checkbox" value="true" name="filter_forecast_profit_gt_zero" id="filter-forecast" checked>
                                         <label class="form-check-label" for="filter-forecast">业绩预告季度净利润>0 且扣除商誉PB>0</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" value="true" name="filter_dedt_forecast_profit_gt_zero" id="filter-dedt-forecast">
+                                        <label class="form-check-label" for="filter-dedt-forecast">业绩预告季度扣非净利润>0 且扣除商誉PB>0</label>
                                     </div>
                                 </div>
                             </div>
