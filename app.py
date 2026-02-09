@@ -41,6 +41,7 @@ from services.macro_service import MacroDataService
 from services.fedwatch_service import FedWatchService
 from services.vix_intraday import VixIntradayStore
 from services.alpha_portfolio import AlphaPortfolioMonitor
+from services.constants import SINA_HEADERS
 
 import tushare as ts
 try:
@@ -242,6 +243,97 @@ def _parse_trump_truth_feed(content: str):
     return items
 
 
+def _fetch_sina_quotes(codes: list) -> dict:
+    if not codes:
+        return {}
+    url = f"https://hq.sinajs.cn/list={','.join(codes)}"
+    result = {}
+    debug = os.getenv("JC_DEBUG", "0") == "1"
+    for _ in range(2):
+        resp = requests.get(url, headers=SINA_HEADERS, timeout=5)
+        resp.raise_for_status()
+        resp.encoding = "gbk"
+        text = resp.text.strip()
+        if debug:
+            Logger.info(f"sina raw: {text[:200]}")
+        for match in re.finditer(r'var\s+hq_str_(\w+)="(.*?)";', text):
+            key, payload = match.groups()
+            result[key] = payload.split(",")
+        if result:
+            return result
+    if debug:
+        Logger.warn("sina quote empty")
+    return result
+
+
+def _get_rotation_base():
+    if ROTATION_BASE_CACHE["date"] is not None:
+        return ROTATION_BASE_CACHE
+    values = {}
+    try:
+        for item in ROTATION_ETFS:
+            ts_code = item["code"] + (".SZ" if item["sina"].startswith("sz") else ".SH")
+            df = pro.fund_daily(ts_code=ts_code, trade_date=str(ROTATION_BASE_DATE))
+            if df is None or df.empty:
+                continue
+            close_val = df.iloc[0].get("close")
+            if close_val is None or (isinstance(close_val, float) and np.isnan(close_val)):
+                continue
+            values[item["code"]] = float(close_val)
+        ROTATION_BASE_CACHE["date"] = ROTATION_BASE_DATE
+        ROTATION_BASE_CACHE["values"] = values
+    except Exception:
+        pass
+    return ROTATION_BASE_CACHE
+
+
+def _get_rotation_monitor_payload():
+    base = _get_rotation_base()
+    base_date = base.get("date")
+    base_values = base.get("values", {})
+    quotes = _fetch_sina_quotes([item["sina"] for item in ROTATION_ETFS])
+    debug = os.getenv("JC_DEBUG", "0") == "1"
+    rows = []
+    for item in ROTATION_ETFS:
+        fields = quotes.get(item["sina"])
+        if debug:
+            Logger.info(f"rotation {item['sina']} fields: {fields}")
+        last_price = None
+        prev_close = None
+        if fields and len(fields) > 3:
+            try:
+                last_price = float(fields[3])
+                prev_close = float(fields[2]) if fields[2] else None
+            except Exception:
+                last_price = None
+        base_close = base_values.get(item["code"])
+        change = None
+        change_pct = None
+        if last_price is not None and base_close not in (None, 0):
+            change = last_price - base_close
+            change_pct = change / base_close * 100
+        day_change = None
+        day_change_pct = None
+        if last_price is not None and prev_close not in (None, 0):
+            day_change = last_price - prev_close
+            day_change_pct = day_change / prev_close * 100
+        rows.append(
+            {
+                "code": item["code"],
+                "base_close": base_close,
+                "last_price": last_price,
+                "change": change,
+                "change_pct": change_pct,
+                "day_change": day_change,
+                "day_change_pct": day_change_pct,
+            }
+        )
+    return {
+        "base_date": int2date(base_date) if base_date else None,
+        "items": rows,
+    }
+
+
 def refresh_trump_truth(force: bool = False):
     payload = _load_trump_truth_cache()
     last_fetch = payload.get("last_fetch")
@@ -415,6 +507,13 @@ TRUMP_TRUTH_CACHE_PATH = Path(__file__).resolve().parent / "data" / "trump_truth
 TRUMP_TRUTH_FEED_URL = "https://trumpstruth.org/feed"
 TRUMP_TRUTH_REFRESH_SEC = 15 * 60
 TRUMP_TRUTH_MAX_ITEMS = 1000
+ROTATION_BASE_DATE = 20260123
+ROTATION_ETFS = [
+    {"code": "159915", "sina": "sz159915", "cache": "159915.SZE"},
+    {"code": "513100", "sina": "sh513100", "cache": "513100.SSE"},
+    {"code": "518880", "sina": "sh518880", "cache": "518880.SSE"},
+]
+ROTATION_BASE_CACHE = {"date": None, "values": {}}
 
 
 def resolve_trade_date_for_cutoff(cutoff_hour: int = 15) -> str:
@@ -1027,6 +1126,7 @@ def monitor_data():
         payload["vix_history"] = vix_history_store.get_history()
         payload["vix_intraday"] = vix_intraday_store.get_kline()
         payload["macro"] = macro_service.get_macro_snapshot()
+        payload["rotation"] = _get_rotation_monitor_payload()
         return jsonify(convert_numpy_types(payload))
     except Exception as exc:
         Logger.error(f"fetch monitor data failed: {exc}")

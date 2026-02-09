@@ -119,6 +119,36 @@
                 </div>
             </div>
 
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center flex-column flex-lg-row">
+                    <div>
+                        <div class="text-uppercase small text-muted">轮动策略监测</div>
+                        <h5 class="mb-0">159915 / 513100 / 518880 实时追踪</h5>
+                    </div>
+                    <span class="small text-muted">基准收盘价日期：<span id="rotation-base-date">--</span></span>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th style="width: 120px;">ETF</th>
+                                    <th style="width: 160px;">20260123收盘价</th>
+                                    <th style="width: 140px;">最新价</th>
+                                    <th style="width: 160px;">相对20260123涨跌幅</th>
+                                    <th style="width: 140px;">当日涨跌幅</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rotation-table-body">
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted">数据加载中...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
             <div id="monitor-container" class="row gy-4">
                 <div class="col-12">
                     <div class="text-center py-5 text-muted">
@@ -582,6 +612,30 @@
             }).join('');
         }
 
+        function renderRotation(rotation) {
+            const body = document.getElementById('rotation-table-body');
+            const baseDateEl = document.getElementById('rotation-base-date');
+            if (!body) return;
+            if (!rotation || !rotation.items || !rotation.items.length) {
+                body.innerHTML = '<tr><td colspan="5" class="text-center text-muted">暂无数据</td></tr>';
+                if (baseDateEl) baseDateEl.textContent = '--';
+                return;
+            }
+            if (baseDateEl) baseDateEl.textContent = rotation.base_date || '--';
+            body.innerHTML = rotation.items.map(item => {
+                const changeCls = priceClass(item.change);
+                const dayCls = priceClass(item.day_change);
+                return `
+                    <tr>
+                        <td class="fw-semibold">${item.code}</td>
+                        <td>${formatNumber(item.base_close, 4)}</td>
+                        <td>${formatNumber(item.last_price, 4)}</td>
+                        <td class="${changeCls}">${formatPercent(item.change_pct, 2)}</td>
+                        <td class="${dayCls}">${formatPercent(item.day_change_pct, 2)}</td>
+                    </tr>`;
+            }).join('');
+        }
+
         async function fetchMonitorData() {
             try {
                 const res = await fetch(API_URL, { cache: 'no-store' });
@@ -596,6 +650,7 @@
                 renderVixIntraday(data.vix_intraday || {});
                 renderTermStructure(data.option_term_structure || []);
                 renderMacro(data.macro || []);
+                renderRotation(data.rotation || {});
                 document.getElementById('last-update').textContent = new Date(data.generated_at).toLocaleString('zh-CN', { hour12: false });
             } catch (err) {
                 console.error(err);

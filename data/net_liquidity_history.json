@@ -1,6 +1,6 @@
 {
-  "updated_date": "2026-02-06",
-  "updated_at": "2026-02-06 09:30:19 CST",
+  "updated_date": "2026-02-09",
+  "updated_at": "2026-02-09 09:18:35 CST",
   "components": {
     "walcl": {
       "date": "2026-02-04",
@@ -11,8 +11,8 @@
       "value": 908.773
     },
     "rrp": {
-      "date": "2026-02-05",
-      "value": 1.748
+      "date": "2026-02-06",
+      "value": 3.111
     }
   },
   "latest": {
