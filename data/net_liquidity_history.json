@@ -1,29 +1,25 @@
 {
-  "updated_date": "2026-02-09",
-  "updated_at": "2026-02-09 09:18:35 CST",
+  "updated_date": "2026-02-26",
+  "updated_at": "2026-02-26 09:51:20 CST",
   "components": {
     "walcl": {
-      "date": "2026-02-04",
-      "value": 6605.909
+      "date": "2026-02-18",
+      "value": 6613.395
     },
     "tga": {
-      "date": "2026-02-04",
-      "value": 908.773
+      "date": "2026-02-18",
+      "value": 912.727
     },
     "rrp": {
-      "date": "2026-02-06",
-      "value": 3.111
+      "date": "2026-02-25",
+      "value": 1.159
     }
   },
   "latest": {
-    "date": "2026-02-04",
-    "value": 5694.722
+    "date": "2026-02-18",
+    "value": 5699.812000000001
   },
   "history": [
-    {
-      "date": "2024-12-18",
-      "net_liquidity_bil": 5989.749000000001
-    },
     {
       "date": "2025-01-08",
       "net_liquidity_bil": 6015.773999999999
@@ -251,6 +247,14 @@
     {
       "date": "2026-02-04",
       "net_liquidity_bil": 5694.722
+    },
+    {
+      "date": "2026-02-11",
+      "net_liquidity_bil": 5706.027999999999
+    },
+    {
+      "date": "2026-02-18",
+      "net_liquidity_bil": 5699.812000000001
     }
   ],
   "unit": "USD Billions",

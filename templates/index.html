@@ -20,6 +20,7 @@
                     <a href="{{ url_for('backtest_page') }}">回测</a>
                     <a href="{{ url_for('portfolio_page') }}">组合回测</a>
                     <a href="{{ url_for('alpha_portfolio_page') }}">组合监控</a>
+                    <a href="{{ url_for('combo_check_page') }}">组合检测</a>
                     <a href="{{ url_for('fear_greed') }}">美股情绪</a>
                     <a href="{{ url_for('cn_fear') }}">A股情绪</a>
                     <a href="{{ url_for('bse_fear') }}">北交所情绪</a>
@@ -85,7 +86,7 @@
                                         <label class="form-check-label" for="exclude-st">排除ST/*ST股票</label>
                                     </div>
                                     <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" value="true" name="filter_pe_gt_zero" id="filter-pe" checked>
+                                        <input class="form-check-input" type="checkbox" value="true" name="filter_pe_gt_zero" id="filter-pe">
                                         <label class="form-check-label" for="filter-pe">季度扣非PE>0 且扣除商誉PB>0</label>
                                     </div>
                                     <div class="form-check">

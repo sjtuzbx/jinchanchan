@@ -7,7 +7,7 @@
         "bse"
       ],
       "exclude_st": "true",
-      "filter_pe_gt_zero": "true"
+      "filter_forecast_profit_gt_zero": "true"
     },
     "params": {
       "start_date": "2024-12-17",
@@ -18,7 +18,7 @@
       "rebalance_time": "open"
     },
     "name": "xsz20",
-    "updated_at": "2025-12-17T12:37:45.063072"
+    "updated_at": "2026-02-26T07:32:55.881622"
   },
   {
     "filter": {
@@ -28,7 +28,7 @@
         "cyb"
       ],
       "exclude_st": "true",
-      "filter_pe_gt_zero": "true"
+      "filter_forecast_profit_gt_zero": "true"
     },
     "params": {
       "start_date": "2024-12-17",
@@ -39,7 +39,7 @@
       "rebalance_time": "open"
     },
     "name": "bse20",
-    "updated_at": "2025-12-17T12:39:13.230784"
+    "updated_at": "2026-02-26T07:33:04.581533"
   },
   {
     "filter": {

@@ -128,6 +128,10 @@
                     <span class="small text-muted">基准收盘价日期：<span id="rotation-base-date">--</span></span>
                 </div>
                 <div class="card-body">
+                    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center mb-3">
+                        <div class="muted small">20个交易日日期：<span id="rotation-20dates">--</span></div>
+                        <div class="muted small">距离20个交易日后还剩（交易日）：<span id="rotation-remaining">--</span></div>
+                    </div>
                     <div class="table-responsive">
                         <table class="table table-hover align-middle mb-0">
                             <thead>
@@ -615,13 +619,23 @@
         function renderRotation(rotation) {
             const body = document.getElementById('rotation-table-body');
             const baseDateEl = document.getElementById('rotation-base-date');
+            const datesEl = document.getElementById('rotation-20dates');
+            const remainingEl = document.getElementById('rotation-remaining');
             if (!body) return;
             if (!rotation || !rotation.items || !rotation.items.length) {
                 body.innerHTML = '<tr><td colspan="5" class="text-center text-muted">暂无数据</td></tr>';
                 if (baseDateEl) baseDateEl.textContent = '--';
+                if (datesEl) datesEl.textContent = '--';
+                if (remainingEl) remainingEl.textContent = '--';
                 return;
             }
             if (baseDateEl) baseDateEl.textContent = rotation.base_date || '--';
+            if (datesEl) datesEl.textContent = (rotation.trade_dates_20 || []).join('，') || '--';
+            if (remainingEl) {
+                const target = rotation.target_date || '--';
+                const remain = rotation.remaining_days;
+                remainingEl.textContent = remain === null || remain === undefined ? '--' : `${remain} 天（目标日 ${target}）`;
+            }
             body.innerHTML = rotation.items.map(item => {
                 const changeCls = priceClass(item.change);
                 const dayCls = priceClass(item.day_change);

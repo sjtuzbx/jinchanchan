@@ -10,6 +10,8 @@ import random
 import functools
 import os
 import time
+import io
+import contextlib
 from typing import List
 from flask import make_response, jsonify, Response
 from data import get_exchange_filter
@@ -108,6 +110,20 @@ def load_valid_trade_dates() -> List[str]:
         dates.append(f"{raw[:4]}-{raw[4:6]}-{raw[6:]}")
     CALENDAR_DATE_CACHE = sorted(set(dates))
     return CALENDAR_DATE_CACHE
+
+
+def _get_trade_dates_int():
+    if ROTATION_CALENDAR_CACHE["dates"]:
+        return ROTATION_CALENDAR_CACHE["dates"]
+    dates = load_valid_trade_dates()
+    ints = []
+    for d in dates:
+        try:
+            ints.append(int(d.replace("-", "")))
+        except Exception:
+            continue
+    ROTATION_CALENDAR_CACHE["dates"] = ints
+    return ints
 
 
 def resolve_valid_date(date_str: str, valid_set: set) -> str:
@@ -293,6 +309,29 @@ def _get_rotation_monitor_payload():
     base_values = base.get("values", {})
     quotes = _fetch_sina_quotes([item["sina"] for item in ROTATION_ETFS])
     debug = os.getenv("JC_DEBUG", "0") == "1"
+    trade_dates = _get_trade_dates_int()
+    trade_dates_list = []
+    target_date = None
+    remaining_days = None
+    if base_date and trade_dates:
+        idx = int(np.searchsorted(trade_dates, base_date))
+        if idx < len(trade_dates) and trade_dates[idx] != base_date:
+            idx = max(0, idx - 1)
+        trade_dates_list = trade_dates[idx:idx + 20]
+        if len(trade_dates_list) >= 20:
+            target_date = trade_dates_list[-1]
+            try:
+                today_int = int(datetime.date.today().strftime("%Y%m%d"))
+                if today_int <= target_date:
+                    start_idx = int(np.searchsorted(trade_dates, today_int))
+                    if start_idx < len(trade_dates) and trade_dates[start_idx] < today_int:
+                        start_idx += 1
+                    end_idx = int(np.searchsorted(trade_dates, target_date, side="right"))
+                    remaining_days = max(0, end_idx - start_idx)
+                else:
+                    remaining_days = 0
+            except Exception:
+                remaining_days = None
     rows = []
     for item in ROTATION_ETFS:
         fields = quotes.get(item["sina"])
@@ -330,7 +369,234 @@ def _get_rotation_monitor_payload():
         )
     return {
         "base_date": int2date(base_date) if base_date else None,
+        "trade_dates_20": [int2date(x) for x in trade_dates_list],
+        "target_date": int2date(target_date) if target_date else None,
+        "remaining_days": remaining_days,
         "items": rows,
+    }
+
+
+def _previous_trade_date_iso() -> str:
+    target = (beijing_now().date() - datetime.timedelta(days=1)).isoformat()
+    valid_dates = load_valid_trade_dates()
+    if not valid_dates:
+        return target
+    return resolve_valid_date(target, set(valid_dates))
+
+
+def _ts_to_sina_code(ts_code: str) -> str:
+    if not ts_code or "." not in ts_code:
+        return ""
+    symbol, market = ts_code.split(".", 1)
+    market = market.upper()
+    if market in ("SH", "SSE"):
+        return f"sh{symbol}"
+    if market in ("SZ", "SZE"):
+        return f"sz{symbol}"
+    if market in ("BJ", "BSE"):
+        return f"bj{symbol}"
+    return ""
+
+
+def _combo_cache_path(strategy_name: str) -> Path:
+    return Path(__file__).resolve().parent / "data" / f"combo_check_{strategy_name}_cache.json"
+
+
+def _build_combo_base_payload(strategy_name: str, force: bool = False) -> dict:
+    asof_date = _previous_trade_date_iso()
+    strategy_name = (strategy_name or "").strip()
+    if strategy_name not in COMBO_CHECK_STRATEGIES:
+        return {"error": f"不支持的策略: {strategy_name}"}
+    cache = COMBO_CHECK_CACHE.setdefault(strategy_name, {"asof_date": None, "updated_at": 0.0, "base": None})
+    now_ts = time.time()
+    if (
+        not force
+        and cache["base"] is not None
+        and cache["asof_date"] == asof_date
+        and (now_ts - float(cache["updated_at"] or 0)) < COMBO_CHECK_TTL_SEC
+    ):
+        return cache["base"]
+
+    cache_path = _combo_cache_path(strategy_name)
+    if not force and cache_path.exists():
+        try:
+            disk_payload = json.loads(cache_path.read_text(encoding="utf-8"))
+        except Exception:
+            disk_payload = None
+        if (
+            isinstance(disk_payload, dict)
+            and disk_payload.get("strategy") == strategy_name
+            and disk_payload.get("start_date") == COMBO_CHECK_START_DATE
+            and disk_payload.get("asof_date") == asof_date
+            and (disk_payload.get("holdings") or [])
+            and (disk_payload.get("daily_nav_history") or [])
+        ):
+            cache["asof_date"] = asof_date
+            cache["updated_at"] = now_ts
+            cache["base"] = disk_payload
+            return disk_payload
+
+    strategy_item = strategy_store.get(strategy_name)
+    if not strategy_item:
+        return {"error": f"策略 {strategy_name} 不存在"}
+
+    params = dict(strategy_item.get("params") or {})
+    params["start_date"] = COMBO_CHECK_START_DATE
+    params["end_date"] = asof_date
+    with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+        result = backtest_service.run(strategy_item.get("filter") or {}, params)
+
+    history = result.get("position_history") or []
+    if not history:
+        return {"error": "回测结果无持仓历史"}
+
+    entry = None
+    for row in history:
+        if row.get("date") == asof_date:
+            entry = row
+            break
+    if entry is None:
+        entry = history[-1]
+
+    cash = float(entry.get("cash") or 0.0)
+    holdings = []
+    prev_close_nav = cash
+    for pos in entry.get("positions") or []:
+        code = str(pos.get("code") or "")
+        shares = float(pos.get("shares") or 0.0)
+        close_price = float(pos.get("price") or 0.0)
+        close_value = float(pos.get("value") or (shares * close_price))
+        prev_close_nav += close_value
+        holdings.append(
+            {
+                "code": code,
+                "name": pos.get("name") or code,
+                "shares": shares,
+                "close_price": close_price,
+                "close_value": close_value,
+                "weight": 0.0,
+                "sina_code": _ts_to_sina_code(code),
+            }
+        )
+
+    if prev_close_nav > 0:
+        for item_h in holdings:
+            item_h["weight"] = float(item_h["close_value"]) / prev_close_nav
+
+    chart_data = result.get("chart_data") or {}
+    labels = chart_data.get("labels") or []
+    nav_values = chart_data.get("strategy") or []
+    daily_nav_history = []
+    for d, nav in zip(labels, nav_values):
+        try:
+            daily_nav_history.append({"date": d, "nav": float(nav)})
+        except Exception:
+            continue
+
+    payload = {
+        "strategy": strategy_name,
+        "start_date": COMBO_CHECK_START_DATE,
+        "asof_date": entry.get("date"),
+        "rebalance_period": int(params.get("rebalance_period") or 0),
+        "hold_stocks": int(params.get("hold_stocks") or 0),
+        "cash": cash,
+        "prev_close_nav": prev_close_nav,
+        "daily_nav_history": daily_nav_history,
+        "holdings": holdings,
+        "generated_at": beijing_now().strftime("%Y-%m-%d %H:%M:%S CST"),
+    }
+    cache["asof_date"] = asof_date
+    cache["updated_at"] = now_ts
+    cache["base"] = payload
+    try:
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    except Exception as exc:
+        Logger.warn(f"combo cache write failed: {exc}")
+    return payload
+
+
+def _build_combo_live_payload(strategy_name: str, force: bool = False) -> dict:
+    base = _build_combo_base_payload(strategy_name=strategy_name, force=force)
+    if base.get("error"):
+        return base
+
+    holdings = base.get("holdings") or []
+    quote_codes = [h.get("sina_code") for h in holdings if h.get("sina_code")]
+    quotes = _fetch_sina_quotes(quote_codes)
+
+    live_nav = float(base.get("cash") or 0.0)
+    missing_quotes = []
+    live_holdings = []
+    for h in holdings:
+        code = h.get("code")
+        fields = quotes.get(h.get("sina_code") or "")
+        live_price = None
+        prev_close = None
+        if fields and len(fields) > 3:
+            try:
+                live_price = float(fields[3])
+                prev_close = float(fields[2]) if fields[2] else None
+            except Exception:
+                live_price = None
+                prev_close = None
+        if live_price is None:
+            live_price = float(h.get("close_price") or 0.0)
+            missing_quotes.append(code)
+
+        shares = float(h.get("shares") or 0.0)
+        close_price = float(h.get("close_price") or 0.0)
+        close_value = float(h.get("close_value") or 0.0)
+        live_value = shares * live_price
+        pnl = live_value - close_value
+        day_change_pct = None
+        if prev_close not in (None, 0):
+            day_change_pct = (live_price / prev_close) - 1
+
+        live_nav += live_value
+        live_holdings.append(
+            {
+                "code": code,
+                "name": h.get("name"),
+                "shares": shares,
+                "weight": h.get("weight"),
+                "close_price": close_price,
+                "live_price": live_price,
+                "close_value": close_value,
+                "live_value": live_value,
+                "pnl": pnl,
+                "day_change_pct": day_change_pct,
+            }
+        )
+
+    prev_close_nav = float(base.get("prev_close_nav") or 0.0)
+    intraday_return = (live_nav / prev_close_nav - 1) if prev_close_nav > 0 else None
+    daily_nav_history = base.get("daily_nav_history") or []
+    last_hist_nav = None
+    if daily_nav_history:
+        try:
+            last_hist_nav = float(daily_nav_history[-1].get("nav"))
+        except Exception:
+            last_hist_nav = None
+    live_nav_normalized = None
+    if prev_close_nav > 0 and last_hist_nav is not None:
+        live_nav_normalized = last_hist_nav * (live_nav / prev_close_nav)
+
+    return {
+        "strategy": base.get("strategy"),
+        "start_date": base.get("start_date"),
+        "asof_date": base.get("asof_date"),
+        "rebalance_period": base.get("rebalance_period"),
+        "hold_stocks": base.get("hold_stocks"),
+        "generated_at": base.get("generated_at"),
+        "quote_time": beijing_now().strftime("%Y-%m-%d %H:%M:%S CST"),
+        "daily_nav_history": daily_nav_history,
+        "prev_close_nav": prev_close_nav,
+        "live_nav": live_nav,
+        "live_nav_normalized": live_nav_normalized,
+        "intraday_return": intraday_return,
+        "holdings": live_holdings,
+        "missing_quotes": sorted(set([x for x in missing_quotes if x])),
     }
 
 
@@ -514,6 +780,12 @@ ROTATION_ETFS = [
     {"code": "518880", "sina": "sh518880", "cache": "518880.SSE"},
 ]
 ROTATION_BASE_CACHE = {"date": None, "values": {}}
+ROTATION_CALENDAR_CACHE = {"dates": []}
+COMBO_CHECK_STRATEGY = "bse20"
+COMBO_CHECK_STRATEGIES = ("bse20", "xsz20")
+COMBO_CHECK_START_DATE = "2024-01-01"
+COMBO_CHECK_TTL_SEC = 300
+COMBO_CHECK_CACHE = {}
 
 
 def resolve_trade_date_for_cutoff(cutoff_hour: int = 15) -> str:
@@ -1666,6 +1938,26 @@ def alpha_portfolio_page():
 def alpha_portfolio_data():
     result = alpha_portfolio_monitor.refresh()
     return jsonify(convert_numpy_types(result))
+
+
+@app.route('/portfolio/combo-check')
+def combo_check_page():
+    return render_template('combo_check.html', strategies=list(COMBO_CHECK_STRATEGIES), default_strategy=COMBO_CHECK_STRATEGY)
+
+
+@app.route('/portfolio/combo-check/data')
+def combo_check_data():
+    try:
+        force = request.args.get("force") == "1"
+        strategy_name = request.args.get("strategy", COMBO_CHECK_STRATEGY).strip()
+        payload = _build_combo_live_payload(strategy_name=strategy_name, force=force)
+        if payload.get("error"):
+            return jsonify(payload), 500
+        return jsonify(convert_numpy_types(payload))
+    except Exception as exc:
+        Logger.error(f"combo check failed: {exc}")
+        Logger.error(traceback.format_exc())
+        return jsonify({"error": "组合检测数据获取失败"}), 500
 
 
 def generate_backtest_results(params):
